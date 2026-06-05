@@ -1,6 +1,6 @@
 #pragma once
 
-#include <print>
+#include "compat_print.h"
 #include <mutex>
 #include <vector>
 
@@ -9,7 +9,11 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
+#if defined(USE_HIP)
+#include "cuda_to_hip.h"
+#else
 #include "cuda.h"
+#endif
 #include "unsuck.hpp"
 #include "VKRenderer.h"
 #include "CURuntime.h"
@@ -204,7 +208,7 @@ struct CudaVulkanSharedMemory {
 
 		while (committedSize < requested_size) {
 			uint64_t diff             = requested_size - committedSize;
-			uint64_t stepSize         = min(diff, 1'000'000'000llu);
+			uint64_t stepSize         = std::min<uint64_t>(diff, 1000000000ull);
 			uint64_t currentRequested = committedSize + stepSize;
 			uint64_t padded           = roundUp(currentRequested, granularity);
 			if (padded <= committedSize) break;
@@ -297,7 +301,7 @@ struct CudaVulkanSharedMemory {
 #ifdef _WIN32
 				CloseHandle(win32Handle);
 #endif
-				println("{}", stacktrace::current());
+				std::cerr << to_string(stacktrace::current()) << std::endl;
 				exit(26245762354);
 			}
 
@@ -333,12 +337,12 @@ struct CudaVulkanSharedMemory {
 
 		if(!validRange){
 			println("ERROR: Attempted to memcpy to unallocated or uncomitted range.");
-			println("    cptr:          {:15L}", cptr);
-			println("    comitted:      {:15L}", committedSize);
-			println("    target offset: {:15L}", offset);
-			println("    source size:   {:15L}", size);
+			println("    cptr:          {:15}", cptr);
+			println("    comitted:      {:15}", committedSize);
+			println("    target offset: {:15}", offset);
+			println("    source size:   {:15}", size);
 
-			println("{}", trace);
+			std::cerr << to_string(trace) << std::endl;
 
 			exit(652345345);
 		}

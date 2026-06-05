@@ -14,9 +14,16 @@
 #include "./scene/SNPoints.h"
 #include "./scene/SNCPoints.h"
 
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+#include "HipModularProgram.h"
+using CudaModularProgram = HipModularProgram;
+using CudaModule = HipModule;
+#else
 #include "cuda.h"
 #include "cuda_runtime.h"
 #include "CudaModularProgram.h"
+#endif
 
 #include "VKRenderer.h"
 #include "OrbitControls.h"

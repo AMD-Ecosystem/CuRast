@@ -9,7 +9,11 @@
 // };
 // =======================
 
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include "../cuda_to_hip.h"
+#else
 #include <cooperative_groups.h>
+#endif
 
 namespace cg = cooperative_groups;
 
@@ -143,6 +147,43 @@ void computeMipMap(uint32_t* data, int width, int height){
 	int threads_per_block = 128;
 
 	int device = 0;
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+	hipGetDevice(&device);
+
+	hipDeviceProp_t deviceProp;
+	hipGetDeviceProperties(&deviceProp, device);
+
+	int numBlocksPerSm;
+	hipOccupancyMaxActiveBlocksPerMultiprocessor(
+		&numBlocksPerSm,
+		kernel_computeMipMap,
+		threads_per_block,
+		0
+	);
+	uint32_t max_supported_blocks = deviceProp.multiProcessorCount * numBlocksPerSm;
+
+	dim3 dimGrid(max_supported_blocks);
+	dim3 dimBlock(threads_per_block);
+
+	void* kernel_args[] = {
+		&data,
+		&width,
+		&height,
+	};
+
+	hipError_t err = hipLaunchCooperativeKernel(
+		(const void*)kernel_computeMipMap,
+		dimGrid,
+		dimBlock,
+		kernel_args,
+		0, // Shared memory (in bytes)
+		0  // Stream (0 for default stream)
+	);
+
+	if (err != hipSuccess) {
+		fprintf(stderr, "Cooperative launch failed: %s\n", hipGetErrorString(err));
+	}
+#else
 	cudaGetDevice(&device);
 
 	cudaDeviceProp deviceProp;
@@ -156,7 +197,7 @@ void computeMipMap(uint32_t* data, int width, int height){
 		0
 	);
 	uint32_t max_supported_blocks = deviceProp.multiProcessorCount * numBlocksPerSm;
-	
+
 	dim3 dimGrid(max_supported_blocks);
 	dim3 dimBlock(threads_per_block);
 
@@ -178,4 +219,5 @@ void computeMipMap(uint32_t* data, int width, int height){
 	if (err != cudaSuccess) {
 		fprintf(stderr, "Cooperative launch failed: %s\n", cudaGetErrorString(err));
 	}
+#endif
 }

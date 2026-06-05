@@ -1,10 +1,46 @@
 #pragma once
 
-#include <print>
+#include "compat_print.h"
 #include <mutex>
 #include <stacktrace>
 
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+// HIP virtual memory API (ROCm 5.2+)
+#include <hip/hip_runtime_api.h>
+// Map CUDA Driver API types to HIP equivalents
+using CUdeviceptr = hipDeviceptr_t;
+using CUdevice = int;
+using CUmemGenericAllocationHandle = hipMemGenericAllocationHandle_t;
+// Map CUDA enums to HIP
+#define CUDA_SUCCESS hipSuccess
+#define CU_MEM_ALLOCATION_TYPE_PINNED hipMemAllocationTypePinned
+#define CU_MEM_LOCATION_TYPE_DEVICE hipMemLocationTypeDevice
+#define CU_MEM_ALLOC_GRANULARITY_MINIMUM hipMemAllocationGranularityMinimum
+#define CU_MEM_ACCESS_FLAGS_PROT_READWRITE hipMemAccessFlagsProtReadWrite
+#define CU_MEM_ALLOCATION_COMP_GENERIC 0  // HIP doesn't have compression type enum
+// Map CUDA functions to HIP
+#define cuDeviceGet hipDeviceGet
+#define cuMemGetAllocationGranularity hipMemGetAllocationGranularity
+#define cuMemAddressReserve hipMemAddressReserve
+#define cuMemCreate hipMemCreate
+#define cuMemMap hipMemMap
+#define cuMemSetAccess hipMemSetAccess
+#define cuMemRelease hipMemRelease
+#define cuMemUnmap hipMemUnmap
+#define cuMemAddressFree hipMemAddressFree
+#define cuMemcpyHtoD hipMemcpyHtoD
+#define cuMemcpyDtoH hipMemcpyDtoH
+#define cuMemsetD8 hipMemsetD8
+#define cuMemsetD32 hipMemsetD32
+
+// HIP versions of structures
+using CUmemAllocationProp = hipMemAllocationProp;
+using CUmemAccessDesc = hipMemAccessDesc;
+#else
 #include "cuda.h"
+#endif
+
 #include "unsuck.hpp"
 #include "CURuntime.h"
 
@@ -113,7 +149,7 @@ struct CudaVirtualMemory{
 			// TODO: reserve new virtual range and remap
 			println("physically comitting beyond initial virtual range not yet implemented.");
 			println("TODO: reserve new virtual range and remap");
-			println("{}", stacktrace::current());
+			std::cerr << to_string(stacktrace::current()) << std::endl;
 			exit(6235266);
 		}
 
@@ -158,12 +194,12 @@ struct CudaVirtualMemory{
 
 		if(!validRange){
 			println("ERROR: Attempted to memcpy to unallocated or uncomitted range.");
-			println("    cptr:          {:15L}", cptr);
-			println("    comitted:      {:15L}", comitted);
-			println("    target offset: {:15L}", offset);
-			println("    source size:   {:15L}", size);
+			println("    cptr:          {:15}", cptr);
+			println("    comitted:      {:15}", comitted);
+			println("    target offset: {:15}", offset);
+			println("    source size:   {:15}", size);
 
-			println("{}", trace);
+			std::cerr << to_string(trace) << std::endl;
 			__debugbreak();
 			exit(652345345);
 		}
@@ -173,7 +209,7 @@ struct CudaVirtualMemory{
 
 		// if(result != CUDA_SUCCESS){
 		// 	println("cuMemcpyHtoD failed with error code {}", int(result));
-		// 	println("{}", trace);
+		// 	std::cerr << to_string(trace) << std::endl;
 		// 	__debugbreak();
 		// 	exit(6125234);
 		// }

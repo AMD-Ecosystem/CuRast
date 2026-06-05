@@ -2,8 +2,12 @@
 
 #include <string>
 #include <format>
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+#else
 #include "cuda.h"
 #include "cuda_runtime.h"
+#endif
 
 #include <glm/glm.hpp>
 #include <glm/common.hpp>

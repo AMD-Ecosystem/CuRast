@@ -1,6 +1,6 @@
 ﻿#include <cstdio>
 #include <format>
-#include <print>
+#include "compat_print.h"
 #include <filesystem>
 #include <string>
 #include <queue>
@@ -11,9 +11,18 @@
 
 #include "unsuck.hpp"
 
+#if defined(USE_HIP)
+#include "cuda_to_hip.h"
+#include "HipModularProgram.h"
+// Type alias so existing code compiles
+using CudaModularProgram = HipModularProgram;
+using CudaModule = HipModule;
+#else
 #include "cuda.h"
 #include "cuda_runtime.h"
 #include "CudaModularProgram.h"
+#endif
+
 #include "CudaVulkanSharedMemory.h"
 #include "VulkanCudaSharedMemory.h"
 #include "jpeg/JPEGIndexer.h"
@@ -33,7 +42,11 @@
 
 using namespace std; // YOLO
 
+#if defined(USE_HIP)
+hipCtx_t context;
+#else
 CUcontext context;
+#endif
 
 mat4 flip = mat4(
 	1.000,  0.000, 0.000, 0.000,
@@ -42,11 +55,16 @@ mat4 flip = mat4(
 	0.000,  0.000, 0.000, 1.000);
 
 void initCuda() {
+#if defined(USE_HIP)
+	hipInit(0);
+	hipDeviceGet(&CURuntime::device, 0);
+	hipCtxCreate(&context, 0, CURuntime::device);
+#else
 	cuInit(0);
-	
 	CUctxCreateParams creation_params = {};
 	cuDeviceGet(&CURuntime::device, 0);
 	cuCtxCreate(&context, &creation_params, 0, CURuntime::device);
+#endif
 }
 
 

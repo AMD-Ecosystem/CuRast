@@ -1,9 +1,16 @@
 #pragma once
 
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+#include "HipModularProgram.h"
+using CudaModularProgram = HipModularProgram;
+using CudaModule = HipModule;
+#else
 #include "cuda.h"
+#include "CudaModularProgram.h"
+#endif
 
 #include "kernels/HostDeviceInterface.h"
-#include "CudaModularProgram.h"
 #include "MemoryManager.h"
 #include "JptInterface.cuh"
 
@@ -59,7 +66,7 @@ struct JpegTextures{
 			&cptr_TBSlotsCounter,
 			&freezeCache
 		}, decodedMcuMap->capacity);
-		cuMemcpy((CUdeviceptr)decodedMcuMap->entries, (CUdeviceptr)decodedMcuMap_tmp->entries, decodedMcuMap_tmp->capacity * 8);
+		cuMemcpyDtoD((CUdeviceptr)decodedMcuMap->entries, (CUdeviceptr)decodedMcuMap_tmp->entries, decodedMcuMap_tmp->capacity * 8);
 	}
 
 };

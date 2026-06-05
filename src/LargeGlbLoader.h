@@ -10,9 +10,13 @@
 #include "scene/SceneNode.h"
 #include "scene/SNTriangles.h"
 #include "MemoryManager.h"
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include "HipModularProgram.h"
+using CudaModularProgram = HipModularProgram;
+#else
 #include "CudaModularProgram.h"
+#endif
 #include "ThreadPool.h"
-#include "CudaModularProgram.h"
 #include "Timer.h"
 #include "BitEdit.h"
 #include "kernels/textureTools.cuh"
@@ -406,8 +410,8 @@ namespace largeGlb{
 			for(int i = 0; i < pool.numThreads; i++){
 				PinnedBuffer pinnedBuffer;
 				pinnedBuffer.size = roundUp(
-					max(int64_t(largestIndexbufferSize), 100'000'000ll), 
-					file->sectorSize) + file->sectorSize;
+					std::max<int64_t>(int64_t(largestIndexbufferSize), 100'000'000ll),
+					int64_t(file->sectorSize)) + int64_t(file->sectorSize);
 
 				auto result = cuMemAllocHost(&pinnedBuffer.buffer, pinnedBuffer.size);
 				CURuntime::assertCudaSuccess(result);
@@ -708,7 +712,7 @@ namespace largeGlb{
 						}
 					}else{
 						println("unsupported bytes stride or component format");
-						println("{}", stacktrace::current());
+						std::cerr << to_string(stacktrace::current()) << std::endl;
 						__debugbreak();
 						exit(12346347);
 					}
@@ -818,7 +822,7 @@ namespace largeGlb{
 							readValue = readValue_vec3_f32;
 						}else{
 							println("ERROR: unsupported combination of accessor type and component type");
-							println("{}", stacktrace::current());
+							std::cerr << to_string(stacktrace::current()) << std::endl;
 							__debugbreak();
 							exit(123572465);
 						}
@@ -932,7 +936,7 @@ namespace largeGlb{
 								loaded->memory->memcopyHtoD(gpu_memory_offset, (uint8_t*)pinned.buffer, batch_buffersize);
 							}else{
 								println("unsupported");
-								println("{}", stacktrace::current());
+								std::cerr << to_string(stacktrace::current()) << std::endl;
 								exit(623546);
 							}
 							gpu_memory_offset += batch_buffersize;
@@ -1000,7 +1004,7 @@ namespace largeGlb{
 						if(byteStride < sizeof(vec2)){
 							println("Currently unsupported: Source byte stride {} must be larger than target byte stride {}",
 								byteStride, sizeof(vec2));
-							println("{}", stacktrace::current());
+							std::cerr << to_string(stacktrace::current()) << std::endl;
 							exit(635367824);
 						}
 

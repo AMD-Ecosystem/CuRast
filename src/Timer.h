@@ -4,7 +4,11 @@
 #include <queue>
 #include <string>
 
+#if defined(USE_HIP)
+#include <hip/hip_runtime.h>
+#else
 #include "cuda.h"
+#endif
 #include <vulkan/vulkan.h>
 
 
@@ -14,7 +18,11 @@ using namespace std;
 struct Timer{
 
 	struct Timestamp{
+#if defined(USE_HIP)
+		hipEvent_t cudaEvent = nullptr;
+#else
 		CUevent  cudaEvent  = nullptr;
+#endif
 		uint32_t vkQueryIdx = UINT32_MAX; // UINT32_MAX = CUDA timestamp (not Vulkan)
 	};
 
@@ -49,7 +57,11 @@ struct Timer{
 
 				Timestamp timestamp;
 
+#if defined(USE_HIP)
+				hipEventCreate(&timestamp.cudaEvent);
+#else
 				cuEventCreate(&timestamp.cudaEvent, CU_EVENT_DEFAULT);
+#endif
 
 				pool.push(timestamp);
 			}
@@ -66,7 +78,11 @@ struct Timer{
 		Timestamp timestamp = pool.front();
 		pool.pop();
 
+#if defined(USE_HIP)
+		hipEventRecord(timestamp.cudaEvent, 0);
+#else
 		cuEventRecord(timestamp.cudaEvent, 0);
+#endif
 
 		timestamps.push_back(timestamp);
 
@@ -93,9 +109,15 @@ struct Timer{
 		init();
 
 		for(Recording& recording : recordings){
+#if defined(USE_HIP)
+			hipCtxSynchronize();
+			float duration;
+			hipEventElapsedTime(&duration, recording.start.cudaEvent, recording.end.cudaEvent);
+#else
 			cuCtxSynchronize();
 			float duration;
 			cuEventElapsedTime(&duration, recording.start.cudaEvent, recording.end.cudaEvent);
+#endif
 
 			recording.milliseconds = duration;
 		}

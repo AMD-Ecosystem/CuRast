@@ -28,7 +28,15 @@
 #include "unsuck.hpp"
 #include "OrbitControls.h"
 
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+// Type aliases for HIP-Vulkan interop
+using CUexternalMemory = hipExternalMemory_t;
+using CUmipmappedArray = hipMipmappedArray_t;
+using CUsurfObject = hipSurfaceObject_t;
+#else
 #include "cuda.h"
+#endif
 
 using glm::dvec3;
 using glm::dvec4;
@@ -223,7 +231,7 @@ struct VKRenderer {
 		if(result == VK_SUCCESS) return;
 
 		println("ERROR (Vulkan): {}", int(result));
-		println("{}", trace);
+		std::cerr << to_string(trace) << std::endl;
 
 		__debugbreak();
 	}

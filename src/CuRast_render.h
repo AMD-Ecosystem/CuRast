@@ -540,7 +540,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 				&jpegTextures->cptr_TBSlotsCounter,
 				&freezeCache
 			}, jpegTextures->decodedMcuMap->capacity);
-			cuMemcpy((CUdeviceptr)jpegTextures->decodedMcuMap->entries, (CUdeviceptr)jpegTextures->decodedMcuMap_tmp->entries, jpegTextures->decodedMcuMap_tmp->capacity * 8);
+			cuMemcpyDtoD((CUdeviceptr)jpegTextures->decodedMcuMap->entries, (CUdeviceptr)jpegTextures->decodedMcuMap_tmp->entries, jpegTextures->decodedMcuMap_tmp->capacity * 8);
 
 			// {
 			// 	// Disable caching by fully clearing the MCU slot list and hash map at the end of each frame.

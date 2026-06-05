@@ -1,6 +1,10 @@
-#pragma once 
+#pragma once
 
+#if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
+#include <hip/hip_runtime.h>
+#else
 #include "cuda.h"
+#endif
 #include "VulkanCudaSharedMemory.h"
 
 // Usage flags are a strong contended for dumbest things in Vulkan. Just give me device memory...
