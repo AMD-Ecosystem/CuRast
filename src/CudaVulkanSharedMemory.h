@@ -14,6 +14,13 @@
 #else
 #include "cuda.h"
 #endif
+#ifndef HIP_DEVPTR_ADD
+#  ifdef USE_HIP
+#    define HIP_DEVPTR_ADD(ptr, off) ((CUdeviceptr)((uint8_t*)(ptr) + (uint64_t)(off)))
+#  else
+#    define HIP_DEVPTR_ADD(ptr, off) ((CUdeviceptr)(ptr) + (uint64_t)(off))
+#  endif
+#endif
 #include "unsuck.hpp"
 #include "VKRenderer.h"
 #include "CURuntime.h"
@@ -74,7 +81,7 @@ struct CudaVulkanSharedMemory {
 		for (auto& chunk : chunks) {
 			if (chunk.vkMemory != VK_NULL_HANDLE)
 				vkFreeMemory(VKRenderer::device, chunk.vkMemory, nullptr);
-			cuMemUnmap(cptr + chunk.offset, chunk.size);
+			cuMemUnmap(HIP_DEVPTR_ADD(cptr, chunk.offset), chunk.size);
 			if (chunk.cuHandle)
 				cuMemRelease(chunk.cuHandle);
 		}
@@ -222,7 +229,7 @@ struct CudaVulkanSharedMemory {
 			CURuntime::assertCudaSuccess(cuRes);
 
 			cuCtxSynchronize();
-			cuRes = cuMemMap(cptr + chunkOffset, chunkSize, 0, cuHandle, 0);
+			cuRes = cuMemMap(HIP_DEVPTR_ADD(cptr, chunkOffset), chunkSize, 0, cuHandle, 0);
 			cuCtxSynchronize();
 			CURuntime::assertCudaSuccess(cuRes);
 
@@ -242,7 +249,7 @@ struct CudaVulkanSharedMemory {
 		accessDesc.flags         = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
 
 		cuCtxSynchronize();
-		CUresult cuRes = cuMemSetAccess(cptr + phaseStartOffset,
+		CUresult cuRes = cuMemSetAccess(HIP_DEVPTR_ADD(cptr, phaseStartOffset),
 		                                committedSize - phaseStartOffset,
 		                                &accessDesc, 1);
 		cuCtxSynchronize();
@@ -347,7 +354,7 @@ struct CudaVulkanSharedMemory {
 			exit(652345345);
 		}
 
-		CUresult result = cuMemcpyHtoD(cptr + offset, source, size);
+		CUresult result = cuMemcpyHtoD(HIP_DEVPTR_ADD(cptr, offset), source, size);
 		CURuntime::assertCudaSuccess(result);
 	}
 };

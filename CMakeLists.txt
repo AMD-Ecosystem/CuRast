@@ -76,8 +76,10 @@ find_package(TBB QUIET)
 if(TBB_FOUND)
 	target_link_libraries(${TARGET_NAME} PRIVATE TBB::tbb)
 endif()
-# Link stdc++_libbacktrace for std::stacktrace (GCC 13/14)
-target_link_libraries(${TARGET_NAME} PRIVATE -lstdc++exp)
+# Link stdc++_libbacktrace for std::stacktrace (GCC 13/14; not needed on Windows)
+if(NOT WIN32)
+	target_link_libraries(${TARGET_NAME} PRIVATE -lstdc++exp)
+endif()
 
 # Add other third-party libs
 ADD_CUDA(${TARGET_NAME})

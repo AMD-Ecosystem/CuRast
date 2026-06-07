@@ -27,6 +27,16 @@ using CudaModularProgram = HipModularProgram;
 
 using namespace std; // YOLO
 
+// HIP_DEVPTR_ADD: portable offset arithmetic on CUdeviceptr (void* on ROCm, uint64_t on NVIDIA).
+// May already be defined by cuda_to_hip.h or CudaVirtualMemory.h on the HIP path.
+#ifndef HIP_DEVPTR_ADD
+#  ifdef USE_HIP
+#    define HIP_DEVPTR_ADD(ptr, off) ((CUdeviceptr)((uint8_t*)(ptr) + (uint64_t)(off)))
+#  else
+#    define HIP_DEVPTR_ADD(ptr, off) ((CUdeviceptr)(ptr) + (uint64_t)(off))
+#  endif
+#endif
+
 namespace largeGlb{
 
 	constexpr float JPEG_QUALITY = 80;
@@ -521,7 +531,7 @@ namespace largeGlb{
 					}
 
 					DeviceBuffer db;
-					db.cptr = loaded->memory->cptr + gpu_memory_offset;
+					db.cptr = HIP_DEVPTR_ADD(loaded->memory->cptr, gpu_memory_offset);
 					db.size = indexbufferByteSize;
 					db.index_min = index_min;
 					db.index_max = index_max;
@@ -642,7 +652,7 @@ namespace largeGlb{
 						uint64_t gpu_memory_offset = gpu_memory_counter.fetch_add(compressedSize);
 
 						DeviceBuffer db;
-						db.cptr = loaded->memory->cptr + gpu_memory_offset;
+						db.cptr = HIP_DEVPTR_ADD(loaded->memory->cptr, gpu_memory_offset);
 						db.size = compressedSize;
 						accessorToDevicebufferMapping[task.accessorIndex] = db;
 
@@ -682,7 +692,7 @@ namespace largeGlb{
 						uint64_t gpu_memory_offset = gpu_memory_counter.fetch_add(vertexbufferSize);
 
 						DeviceBuffer db;
-						db.cptr = loaded->memory->cptr + gpu_memory_offset;
+						db.cptr = HIP_DEVPTR_ADD(loaded->memory->cptr, gpu_memory_offset);
 						db.size = vertexbufferSize;
 						accessorToDevicebufferMapping[task.accessorIndex] = db;
 
@@ -763,7 +773,7 @@ namespace largeGlb{
 						uint64_t gpu_memory_offset = gpu_memory_counter.fetch_add(vertexbufferSize);
 
 						DeviceBuffer db;
-						db.cptr = loaded->memory->cptr + gpu_memory_offset;
+						db.cptr = HIP_DEVPTR_ADD(loaded->memory->cptr, gpu_memory_offset);
 						db.size = vertexbufferSize;
 						accessorToDevicebufferMapping[accessorIndex] = db;
 
@@ -906,7 +916,7 @@ namespace largeGlb{
 						uint64_t gpu_memory_offset = gpu_memory_counter.fetch_add(targetByteSize);
 
 						DeviceBuffer db;
-						db.cptr = loaded->memory->cptr + gpu_memory_offset;
+						db.cptr = HIP_DEVPTR_ADD(loaded->memory->cptr, gpu_memory_offset);
 						db.size = targetByteSize;
 						accessorToDevicebufferMapping[accessorIndex] = db;
 
@@ -995,7 +1005,7 @@ namespace largeGlb{
 						uint64_t gpu_memory_offset = gpu_memory_counter.fetch_add(targetByteSize);
 
 						DeviceBuffer db;
-						db.cptr = loaded->memory->cptr + gpu_memory_offset;
+						db.cptr = HIP_DEVPTR_ADD(loaded->memory->cptr, gpu_memory_offset);
 						db.size = targetByteSize;
 						accessorToDevicebufferMapping[task.accessorIndex] = db;
 

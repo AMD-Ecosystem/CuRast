@@ -11,6 +11,9 @@
 // Map CUDA Driver API types to HIP equivalents
 using CUdeviceptr = hipDeviceptr_t;
 using CUdevice = int;
+// Windows Clang disallows arithmetic on void* (hipDeviceptr_t).
+// Helper: cast to uint8_t* for arithmetic then back to void*.
+#define HIP_DEVPTR_ADD(ptr, off) ((hipDeviceptr_t)((uint8_t*)(ptr) + (off)))
 using CUmemGenericAllocationHandle = hipMemGenericAllocationHandle_t;
 // Map CUDA enums to HIP
 #define CUDA_SUCCESS hipSuccess
@@ -170,7 +173,7 @@ struct CudaVirtualMemory{
 		CURuntime::assertCudaSuccess(result);
 
 		// and map the physical memory
-		result = cuMemMap(cptr + comitted, required_additional_size, 0, allocHandle, 0); 
+		result = cuMemMap(HIP_DEVPTR_ADD(cptr, comitted), required_additional_size, 0, allocHandle, 0);
 		CURuntime::assertCudaSuccess(result);
 
 		// make the new memory accessible
@@ -178,7 +181,7 @@ struct CudaVirtualMemory{
 		accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
 		accessDesc.location.id = cuDevice;
 		accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
-		result = cuMemSetAccess(cptr + comitted, required_additional_size, &accessDesc, 1);
+		result = cuMemSetAccess(HIP_DEVPTR_ADD(cptr, comitted), required_additional_size, &accessDesc, 1);
 		CURuntime::assertCudaSuccess(result);
 
 		comitted += required_additional_size;
@@ -204,7 +207,7 @@ struct CudaVirtualMemory{
 			exit(652345345);
 		}
 
-		CUresult result = cuMemcpyHtoD(cptr + offset, source, size);
+		CUresult result = cuMemcpyHtoD(HIP_DEVPTR_ADD(cptr, offset), source, size);
 		CURuntime::assertCudaSuccess(result, trace);
 
 		// if(result != CUDA_SUCCESS){

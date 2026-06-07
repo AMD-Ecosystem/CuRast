@@ -63,6 +63,9 @@
 #define CUdeviceptr                 hipDeviceptr_t
 #define CUstream                    hipStream_t
 #define CUevent                     hipEvent_t
+// hipDeviceptr_t is void*, so arithmetic on CUdeviceptr is ill-formed in strict C++.
+// Windows Clang rejects it even in gnu++ mode. Use this helper for offset arithmetic.
+#define HIP_DEVPTR_ADD(ptr, off)    ((hipDeviceptr_t)((uint8_t*)(ptr) + (uint64_t)(off)))
 
 #define cuInit                      hipInit
 #define cuDeviceGet                 hipDeviceGet
@@ -206,5 +209,9 @@ struct CUctxCreateParams_hip { int dummy; };
 #include "cuda.h"
 #include "cuda_runtime.h"
 #include <cooperative_groups.h>
+
+// On NVIDIA, CUdeviceptr is uint64_t, so arithmetic is well-formed.
+// Provide the same helper name so shared source compiles on both paths.
+#define HIP_DEVPTR_ADD(ptr, off)    ((CUdeviceptr)(ptr) + (uint64_t)(off))
 
 #endif // USE_HIP

@@ -62,8 +62,9 @@ static long long unsuck_start_time = high_resolution_clock::now().time_since_epo
 
 #if defined(__linux__)
 constexpr auto fseek_64_all_platforms = fseeko64;
-#elif defined(WIN32)
-constexpr auto fseek_64_all_platforms = _fseeki64;
+#elif defined(WIN32) || defined(_WIN32)
+// _fseeki64 has __declspec(dllimport) in DLL builds, which is not constexpr.
+static auto fseek_64_all_platforms = _fseeki64;
 #endif
 
 

@@ -60,6 +60,18 @@ function(ADD_CUDA TARGET_NAME)
 		endforeach()
 
 		target_compile_definitions(${TARGET_NAME} PRIVATE USE_HIP=1)
+
+		if(WIN32)
+			# On Windows, MSVC's C++23 <cmath> (via _CLANG_BUILTIN1) marks isfinite/
+			# isinf/isnan/isnormal as __host__ __device__ builtins BEFORE the HIP
+			# pre-included runtime wrapper can forward-declare them as __device__-only.
+			# The overload conflict disappears in C++20 mode (MSVC does not apply the
+			# builtin attribute in C++20). Use C++20 for HIP TUs; host CXX stays C++23.
+			# Also define WIN32 (clang only defines _WIN32; some upstream code checks WIN32).
+			target_compile_options(${TARGET_NAME} PRIVATE
+				$<$<COMPILE_LANGUAGE:HIP>:-std=c++20>)
+			target_compile_definitions(${TARGET_NAME} PRIVATE WIN32)
+		endif()
 	else()
 		# CUDA configuration
 		find_package(CUDAToolkit 13.1 REQUIRED)
