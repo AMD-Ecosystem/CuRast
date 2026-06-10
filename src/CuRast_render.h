@@ -698,7 +698,14 @@ void CuRast::renderHeadless(int W, int H, bool screenshot){
 
 	CuRastSettings::requestScreenshot = screenshot ? make_shared<string>("./bench_render.png") : nullptr;
 
+	Timer::enabled = true;
 	draw(&scene, { VKRenderer::view });
+
+	lastFrameMs = 0.0;
+	for(auto& r : Timer::resolve()){
+		Runtime::timings.add(r.label, r.milliseconds);
+		if(r.label == "<triangles visbuffer pipeline>") lastFrameMs += r.milliseconds;
+	}
 }
 
 void CuRast::render(){

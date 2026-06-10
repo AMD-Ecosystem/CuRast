@@ -442,21 +442,38 @@ int main(int argc, char** argv){
 		Runtime::controls->target = { center.x, center.y, center.z };
 		println("[bench] {}x{} {} frames, model extent {:.1f}", benchW, benchH, benchFrames, length(extent));
 	
+		{
+			SNTriangles* firstTri = nullptr;
+			editor->scene.forEach<SNTriangles>([&](SNTriangles* n){ if(!firstTri) firstTri = n; });
+			if(firstTri && firstTri->mesh){
+				vec3 p[3] = {};
+				cuMemcpyDtoH(p, firstTri->mesh->cptr_position, sizeof(p));
+				println("[bench] mesh: numTris={} isLoaded={} vtx0=({:.2f},{:.2f},{:.2f}) vtx1=({:.2f},{:.2f},{:.2f})",
+					firstTri->mesh->numTriangles, firstTri->mesh->isLoaded, p[0].x,p[0].y,p[0].z, p[1].x,p[1].y,p[1].z);
+			}
+		}
+
+		Runtime::controls->update();
+		VKRenderer::camera->world = Runtime::controls->world;
+		VKRenderer::camera->update();
+
+		{
+			glm::dvec4 clip = VKRenderer::camera->proj * VKRenderer::camera->view * glm::dvec4(center.x, center.y, center.z, 1.0);
+			glm::dvec3 ndc = glm::dvec3(clip) / clip.w;
+			glm::dvec3 eye = glm::dvec3(VKRenderer::camera->world * glm::dvec4(0,0,0,1));
+			println("[bench] cam eye=({:.1f},{:.1f},{:.1f}) target=({:.1f},{:.1f},{:.1f}) center-NDC=({:.3f},{:.3f},{:.3f}) clipw={:.2f}",
+				eye.x, eye.y, eye.z, center.x, center.y, center.z, ndc.x, ndc.y, ndc.z, clip.w);
+		}
+
 		double best = 1e30;
 		for(int f = 0; f < benchFrames; f++){
-			VKRenderer::camera->world = glm::translate(Runtime::controls->getPosition()) * Runtime::controls->getRotation();
-			VKRenderer::camera->update();
 			editor->renderHeadless(benchW, benchH, f == benchFrames - 1);
-			cuCtxSynchronize();
-			DeviceState* st = editor->deviceState;
-			double s1 = double(st->nanotime_stage_1 - st->nanotime_start)   / 1000000.0;
-			double s2 = double(st->nanotime_stage_2 - st->nanotime_stage_1) / 1000000.0;
-			double s3 = double(st->nanotime_stage_3 - st->nanotime_stage_2) / 1000000.0;
-			double total = s1 + s2 + s3;
-			if(total < best) best = total;
-			println("[bench] frame {:3}: stage1={:7.3f} stage2={:7.3f} stage3={:7.3f} total={:7.3f} ms", f, s1, s2, s3, total);
+			double ms = editor->lastFrameMs;
+			if(f > 0 && ms > 0.0 && ms < best) best = ms;
+			println("[bench] frame {:3}: visbuffer pipeline = {:7.3f} ms  ({} of {} tris visible, {} fragments)",
+				f, ms, (uint64_t)Runtime::numVisibleTriangles, (uint64_t)Runtime::numTriangles, (uint64_t)editor->deviceState->dbg_fragcount);
 		}
-		println("[bench] best rasterization total: {:.3f} ms over {} triangles", best, (uint64_t)Runtime::numTriangles);
+		println("[bench] best visbuffer-pipeline time: {:.3f} ms @ {}x{}", best, benchW, benchH);
 		println("[bench] wrote ./bench_render.png");
 		return 0;
 	}

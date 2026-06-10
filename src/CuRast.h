@@ -50,6 +50,7 @@ struct CuRast{
 	Scene scene;
 
 	DeviceState* deviceState = nullptr;
+	double lastFrameMs = 0.0;
 	CUdeviceptr cptr_state;
 
 	CommonLaunchArgs launchArgs;

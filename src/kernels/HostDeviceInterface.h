@@ -74,12 +74,12 @@ struct Box3 {
 	}
 
 	void extend(vec3 v){
-		this->min.x = ::min(this->min.x, v.x);
-		this->min.y = ::min(this->min.y, v.y);
-		this->min.z = ::min(this->min.z, v.z);
-		this->max.x = ::max(this->max.x, v.x);
-		this->max.y = ::max(this->max.y, v.y);
-		this->max.z = ::max(this->max.z, v.z);
+		this->min.x = fminf(this->min.x, v.x);
+		this->min.y = fminf(this->min.y, v.y);
+		this->min.z = fminf(this->min.z, v.z);
+		this->max.x = fmaxf(this->max.x, v.x);
+		this->max.y = fmaxf(this->max.y, v.y);
+		this->max.z = fmaxf(this->max.z, v.z);
 	}
 
 	Box3 transform(mat4 matrix){
