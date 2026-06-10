@@ -241,6 +241,7 @@ struct HipModularProgram{
         vector<string> optStrings;
         optStrings.push_back("--std=c++20");
         optStrings.push_back("-ffast-math");
+        optStrings.push_back("-ferror-limit=0");
 
         // Add include paths (absolute: comgr does not reliably resolve relative
         // -I against the launching CWD, and some kernel headers include siblings
@@ -280,8 +281,9 @@ struct HipModularProgram{
         string archOpt = "--gpu-architecture=" + archName;
         optStrings.push_back(archOpt);
 
-        // Relocatable device code for cooperative kernels
-        optStrings.push_back("-fgpu-rdc");
+        // No -fgpu-rdc: HIP cooperative launch does not require relocatable
+        // device code, and with rdc hiprtcGetCode returns no loadable code
+        // object (the bitcode would need a separate hiprtc link step).
 
         // Convert to C strings for hiprtc
         vector<const char*> opts;
@@ -391,8 +393,9 @@ struct HipModularProgram{
 
             if(result == hipSuccess){
                 cachedGlobals[name] = dptr;
+                if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[global] %s -> %p (%zu bytes)\n", name.c_str(), (void*)dptr, bytes); fflush(stdout); }
             }else{
-                println("did not find global variable {}", name);
+                printf("[global] MISSING: %s (err %d)\n", name.c_str(), (int)result); fflush(stdout);
                 return 0;
             }
         }
@@ -410,12 +413,18 @@ struct HipModularProgram{
         launches_per_frame[kernelName]++;
     }
 
+    static void dbgLaunch(const string& kernelName){
+        static bool dbg = getenv("CURAST_DEBUG_LAUNCH") != nullptr;
+        if(dbg){ printf("[launch] %s\n", kernelName.c_str()); fflush(stdout); }
+    }
+
     void launch(string kernelName, vector<void*> args, OptionalLaunchSettings launchArgs = {}){
         void** _args = &args[0];
         this->launch(kernelName, _args, launchArgs);
     }
 
     void launch(string kernelName, void** args, OptionalLaunchSettings launchArgs){
+        dbgLaunch(kernelName);
         auto custart = Timer::recordCudaTimestamp();
 
         hipFunction_t func = getKernel(kernelName);
@@ -443,6 +452,7 @@ struct HipModularProgram{
     }
 
     void launch(string kernelName, void** args, int count, hipStream_t stream = 0){
+        dbgLaunch(kernelName);
         if (count == 0) return;
 
         uint32_t blockSize = 256;
@@ -466,6 +476,7 @@ struct HipModularProgram{
     }
 
     void launch2D(string kernelName, void** args, int width, int height, hipStream_t stream = 0){
+        dbgLaunch(kernelName);
         if (width == 0 || height == 0) return;
 
         uint32_t blockSize = 8;
@@ -500,6 +511,7 @@ struct HipModularProgram{
     }
 
     void launchCooperative(string kernelName, void** args, OptionalLaunchSettings launchArgs = {}){
+        dbgLaunch(kernelName);
         auto custart = Timer::recordCudaTimestamp();
 
         hipDevice_t device;

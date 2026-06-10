@@ -40,6 +40,9 @@ using glm::i8vec4;
 using glm::vec4;
 
 constexpr bool ENABLE_FRAGCOUNTING = false;
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 // Some compile-time template specializations here because for perf reasons, 
 // we need each variation of getVertex to be a separately compiled function.
@@ -828,85 +831,172 @@ void stage3_drawHugeTriangles(RasterArgs args){
 
 
 // INDEXBUFFER; UNCOMPRESSED
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage1_drawSmallTriangles_indexbuffer_uncompressed(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::INDEXBUFFER, Compression::UNCOMPRESSED, Instancing::NO>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage2_drawMediumTriangles_indexbuffer_uncompressed(RasterArgs args) {
 	stage2_drawMediumTriangles<IndexFetch::INDEXBUFFER, Compression::UNCOMPRESSED>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage3_drawHugeTriangles_indexbuffer_uncompressed(RasterArgs args) {
 	stage3_drawHugeTriangles<IndexFetch::INDEXBUFFER, Compression::UNCOMPRESSED>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 // INDEXBUFFER; COMPRESSED
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage1_drawSmallTriangles_indexbuffer_compressed(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::INDEXBUFFER, Compression::IX_PU16, Instancing::NO>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage2_drawMediumTriangles_indexbuffer_compressed(RasterArgs args) {
 	stage2_drawMediumTriangles<IndexFetch::INDEXBUFFER, Compression::IX_PU16>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage3_drawHugeTriangles_indexbuffer_compressed(RasterArgs args) {
 	stage3_drawHugeTriangles<IndexFetch::INDEXBUFFER, Compression::IX_PU16>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 // DIRECT INDEXING; UNCOMPRESSED
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage1_drawSmallTriangles_noindexbuffer_uncompressed(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::DIRECT, Compression::UNCOMPRESSED, Instancing::NO>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage2_drawMediumTriangles_noindexbuffer_uncompressed(RasterArgs args) {
 	stage2_drawMediumTriangles<IndexFetch::DIRECT, Compression::UNCOMPRESSED>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage3_drawHugeTriangles_noindexbuffer_uncompressed(RasterArgs args) {
 	stage3_drawHugeTriangles<IndexFetch::DIRECT, Compression::UNCOMPRESSED>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 // DIRECT INDEXUNG; COMPRESSED
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage1_drawSmallTriangles_noindexbuffer_compressed(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::DIRECT, Compression::IX_PU16, Instancing::NO>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage2_drawMediumTriangles_noindexbuffer_compressed(RasterArgs args) {
 	stage2_drawMediumTriangles<IndexFetch::DIRECT, Compression::IX_PU16>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage3_drawHugeTriangles_noindexbuffer_compressed(RasterArgs args) {
 	stage3_drawHugeTriangles<IndexFetch::DIRECT, Compression::IX_PU16>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 
 
 
 // INDEXBUFFER; UNCOMPRESSED; INSTANCED
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage1_drawSmallTriangles_indexbuffer_uncompressed_instanced(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::INDEXBUFFER, Compression::UNCOMPRESSED, Instancing::YES>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 // INDEXBUFFER; COMPRESSED; INSTANCED
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_stage1_drawSmallTriangles_indexbuffer_compressed_instanced(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::INDEXBUFFER, Compression::IX_PU16, Instancing::YES>(args);
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif

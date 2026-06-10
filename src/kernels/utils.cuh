@@ -8,6 +8,9 @@
 #endif
 
 #include <cstdint>  // Use standard fixed-width types
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 namespace cg = cooperative_groups;
 
@@ -238,3 +241,6 @@ __device__ __forceinline__ float atomicMaxFloat(float * addr, float value) {
 
 	return old;
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif

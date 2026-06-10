@@ -23,6 +23,13 @@
 #else
 	constexpr float Infinity = __builtin_bit_cast(float, 0x7f800000);
 	#include "./jpeg/HashMap.cuh"
+	#if defined(__HIPCC_RTC__)
+	// the hiprtc device pass mirrors the __CUDA_ARCH__ branch's jpeg interface
+	#include "../jpeg/JptInterface.cuh"
+	#endif
+#endif
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
 #endif
 
 
@@ -326,3 +333,6 @@ struct RasterArgs{
 };
 
 extern __constant__ RenderTarget c_target;
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif

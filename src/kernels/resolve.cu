@@ -39,6 +39,9 @@ namespace std {
 using glm::ivec2;
 using glm::i8vec4;
 using glm::vec4;
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 // uint32_t uvToMCUIndex(int width, int height, float u, float v) {
 // 	int tx = (int(u * width) % width);
@@ -211,6 +214,9 @@ uint32_t sampleColor_linear(
 	return color;
 }
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_dummy(
 	uint32_t* data
@@ -220,7 +226,13 @@ void kernel_dummy(
 
 	if(grid.thread_rank() == 0) *data = 123;
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_clearFramebuffer(
 	uint64_t* framebuffer,
@@ -241,6 +253,9 @@ void kernel_clearFramebuffer(
 
 	framebuffer[pixelID] = pixel;
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 __device__
@@ -459,6 +474,9 @@ __device__ float getSSAOShadingFactor(
 	return clamp(1.0f - occlusion * INV_N * INTENSITY, 0.0f, 1.0f);
 }
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_enlarge(
 	cudaSurfaceObject_t gl_desktop,
@@ -552,18 +570,24 @@ void kernel_enlarge(
 	});
 
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_ssaoOcclusion(
 	uint64_t* occlusionBuffer,
 	float* ssaoShadeBuffer
 ){
 	auto grid = cg::this_grid();
-	int x = grid.thread_index().x;
-	int y = grid.thread_index().y;
+	int x = (blockIdx.x * blockDim.x + threadIdx.x);
+	int y = (blockIdx.y * blockDim.y + threadIdx.y);
 
 	if(x >= c_target.width || y >= c_target.height) return;
 
@@ -577,15 +601,21 @@ void kernel_ssaoOcclusion(
 
 	occlusionBuffer[pixelID] = occ;
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_ssaoBlur(
 	uint64_t* occlusionBuffer,
 	float* ssaoShadeBuffer
 ){
 	auto grid = cg::this_grid();
-	int x = grid.thread_index().x;
-	int y = grid.thread_index().y;
+	int x = (blockIdx.x * blockDim.x + threadIdx.x);
+	int y = (blockIdx.y * blockDim.y + threadIdx.y);
 
 	int width = c_target.width;
 	int height = c_target.height;
@@ -646,8 +676,14 @@ void kernel_ssaoBlur(
 	ssaoShadeBuffer[centerIdx] = shade;
 	// ssaoShadeBuffer[centerIdx] = 1.0f;
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_resolve_visbuffer_to_colorbuffer2D(
 	CMesh* meshes,
@@ -662,8 +698,8 @@ void kernel_resolve_visbuffer_to_colorbuffer2D(
 	auto grid = cg::this_grid();
 	auto block = cg::this_thread_block();
 
-	int x = grid.thread_index().x;
-	int y = grid.thread_index().y;
+	int x = (blockIdx.x * blockDim.x + threadIdx.x);
+	int y = (blockIdx.y * blockDim.y + threadIdx.y);
 	// int pixelID = x + c_target.width * y;
 	int pixelID = toFramebufferIndex(x, y, c_target.width);
 
@@ -1075,8 +1111,8 @@ void kernel_resolve_visbuffer_to_colorbuffer2D(
 
 			bool isInside = true;
 
-			for(int dx : {-1, 0, 1})
-			for(int dy : {-1, 0, 1})
+			for(int dx = -1; dx <= 1; dx++)
+			for(int dy = -1; dy <= 1; dy++)
 			{
 
 				int nx = clamp(x + dx, 0, c_target.width - 1);
@@ -1126,8 +1162,8 @@ void kernel_resolve_visbuffer_to_colorbuffer2D(
 		if(p_00 != p_10) color = 0xffff00ff;
 		if(p_00 != p_01) color = 0xffff00ff;
 
-		for(int dx : {0, 1})
-		for(int dy : {0, 1})
+		for(int dx = 0; dx <= 1; dx++)
+		for(int dy = 0; dy <= 1; dy++)
 		// for(int dx : {-1, 0, 1})
 		// for(int dy : {-1, 0, 1})
 		{
@@ -1153,7 +1189,13 @@ void kernel_resolve_visbuffer_to_colorbuffer2D(
 		c_target.colorbuffer[pixelID] = uint64_t(__float_as_uint(INFINITY)) << 32 | 0;
 	}
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_resolve_colorbuffer_to_opengl_2D(
 	cudaSurfaceObject_t gl_desktop,
@@ -1174,8 +1216,8 @@ void kernel_resolve_colorbuffer_to_opengl_2D(
 	RenderTarget& source = c_target;
 
 	if(width == source.width && height == source.height){
-		int x = grid.thread_index().x;
-		int y = grid.thread_index().y;
+		int x = (blockIdx.x * blockDim.x + threadIdx.x);
+		int y = (blockIdx.y * blockDim.y + threadIdx.y);
 		int pixelID = toFramebufferIndex(x, y, source.width);
 
 		if(x >= source.width) return;
@@ -1266,8 +1308,8 @@ void kernel_resolve_colorbuffer_to_opengl_2D(
 
 
 	}else{
-		int target_x = grid.thread_index().x;
-		int target_y = grid.thread_index().y;
+		int target_x = (blockIdx.x * blockDim.x + threadIdx.x);
+		int target_y = (blockIdx.y * blockDim.y + threadIdx.y);
 		int pixelID = toFramebufferIndex(target_x, target_y, width);
 
 		if(target_x >= width) return;
@@ -1334,8 +1376,14 @@ void kernel_resolve_colorbuffer_to_opengl_2D(
 		surf2Dwrite(C, gl_desktop, target_x * 4, target_y);
 	}
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_resolve_colorbuffer_to_screenshot(
 	uint32_t* screenshot,
@@ -1351,8 +1399,8 @@ void kernel_resolve_colorbuffer_to_screenshot(
 
 	RenderTarget& source = c_target;
 
-	int x = grid.thread_index().x;
-	int y = grid.thread_index().y;
+	int x = (blockIdx.x * blockDim.x + threadIdx.x);
+	int y = (blockIdx.y * blockDim.y + threadIdx.y);
 	int pixelID = toFramebufferIndex(x, y, source.width);
 
 	if(x >= source.width) return;
@@ -1386,6 +1434,9 @@ void kernel_resolve_colorbuffer_to_screenshot(
 	screenshot[pixelID] = color;
 	
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
 
 
 uint32_t sampleJpeg_nearest(
@@ -1584,6 +1635,9 @@ uint32_t sampleJpeg_linear(
 	return color;
 }
 
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
 extern "C" __global__
 void kernel_resolve_jpeg(
 	CMesh* meshes,
@@ -1599,8 +1653,8 @@ void kernel_resolve_jpeg(
 	auto grid = cg::this_grid();
 	auto block = cg::this_thread_block();
 
-	int x = grid.thread_index().x;
-	int y = grid.thread_index().y;
+	int x = (blockIdx.x * blockDim.x + threadIdx.x);
+	int y = (blockIdx.y * blockDim.y + threadIdx.y);
 	int pixelID = toFramebufferIndex(x, y, c_target.width);
 
 	if(x >= c_target.width) return;
@@ -1981,8 +2035,8 @@ void kernel_resolve_jpeg(
 
 			bool isInside = true;
 
-			for(int dx : {-1, 0, 1})
-			for(int dy : {-1, 0, 1})
+			for(int dx = -1; dx <= 1; dx++)
+			for(int dy = -1; dy <= 1; dy++)
 			{
 
 				int nx = clamp(x + dx, 0, c_target.width - 1);
@@ -2033,8 +2087,8 @@ void kernel_resolve_jpeg(
 
 		// for(int dx : {-1, 0, 1})
 		// for(int dy : {-1, 0, 1})
-		for(int dx : {0, 1})
-		for(int dy : {0, 1})
+		for(int dx = 0; dx <= 1; dx++)
+		for(int dy = 0; dy <= 1; dy++)
 		{
 			int pid_neighbor = clamp(toFramebufferIndex(x + dx, y + dy, c_target.width), 0u, numPixels - 1);
 			uint32_t p_neighbor = c_target.framebuffer[pid_neighbor] & 0xffffffff;
@@ -2057,3 +2111,9 @@ void kernel_resolve_jpeg(
 		c_target.colorbuffer[pixelID] = uint64_t(__float_as_uint(INFINITY)) << 32 | 0;
 	}
 }
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute push (__attribute__((device)), apply_to=function)
+#endif
+#if defined(__HIPCC_RTC__)
+#pragma clang attribute pop
+#endif
