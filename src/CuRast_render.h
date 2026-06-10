@@ -152,6 +152,11 @@ void drawTrianglesVisbuffer(
 	args.target                          = target;
 	args.state                           = (DeviceState*)CuRast::instance->cptr_state;
 	
+	if(getenv("CURAST_TEST_DUMMY2")){
+		printf("[step] launching dummy2 (regular launch, visbuffer module)\n"); fflush(stdout);
+		prog->launch("kernel_dummy2", {&cptr_numProcessedBatches}, 1);
+		printf("[step] dummy2 returned\n"); fflush(stdout);
+	}
 	prog->launchCooperative(strKernelStage1, vector<void*>{&args}, {.blocksize = TRIANGLES_PER_SWEEP});
 	prog->launchCooperative(strKernelStage2, vector<void*>{&args});
 	prog->launchCooperative(strKernelStage3, vector<void*>{&args}, {.blocksize = 64});
@@ -385,13 +390,51 @@ void CuRast::draw(Scene* scene, vector<View> views){
 		// memcpy arguments to constant buffer
 		CUdeviceptr cptr_target = prog->getGlobalsPointer("c_target");
 		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] c_target ptr=%p, uploading %zu bytes\n", (void*)cptr_target, sizeof(target)); fflush(stdout); }
-		if(cptr_target){ cuMemcpyHtoDAsync(cptr_target, &target, sizeof(target), 0); }
+		static bool skipCtarget = getenv("CURAST_SKIP_CTARGET") != nullptr;
+		if(cptr_target && !skipCtarget){ cuMemcpyHtoDAsync(cptr_target, &target, sizeof(target), 0); }
 
 		// Let the first kernel in the frame be a dummy kernel to take the hit for CUDA-OpenGL interop overhead
 		// (so that we get more accurate timings for the other kernels)
 		static CUdeviceptr dummydata = MemoryManager::alloc(16, "dummydata");
 		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] launch dummy\n"); fflush(stdout); }
-		if(!skipK("dummy")) prog->launch("kernel_dummy", {&dummydata}, 1);
+		if(getenv("CURAST_LADDER")){
+			prog->rawDummyTest("rung1-raw-here", "kernel_dummy");
+			{
+				void* stackArgs[1] = { &dummydata };
+				hipFunction_t f = prog->getKernel("kernel_dummy");
+				hipError_t re = f ? hipModuleLaunchKernel(f, 1,1,1, 256,1,1, 0, 0, stackArgs, nullptr) : hipErrorInvalidValue;
+				hipError_t se = hipDeviceSynchronize();
+				printf("[rung2-raw-dummydata] launch=%d sync=%d\n", (int)re, (int)se); fflush(stdout);
+			}
+			// incremental ladder: add launch()'s operations to the raw core one at a time
+			auto rawCore = [&](const char* tag, bool tsBefore, bool tsAfter, bool viaRing){
+				unsigned int* buf = nullptr; hipMalloc(&buf, 16); hipMemset(buf, 0, 16);
+				void* localArgs[1] = { &buf };
+				void** useArgs = localArgs;
+				if(viaRing){
+					vector<void*> v = { &buf };
+					useArgs = HipModularProgram::keepAliveArgs(v.data(), v.size());
+				}
+				hipFunction_t f = prog->getKernel("kernel_dummy");
+				Timer::Timestamp t0, t1;
+				if(tsBefore) t0 = Timer::recordCudaTimestamp();
+				hipError_t re = hipModuleLaunchKernel(f, 1,1,1, 256,1,1, 0, 0, useArgs, nullptr);
+				if(tsAfter){ t1 = Timer::recordCudaTimestamp(); Timer::recordDuration("ladder", t0, t1); }
+				hipError_t se = hipDeviceSynchronize();
+				unsigned int val = 0; hipMemcpy(&val, buf, 4, hipMemcpyDeviceToHost);
+				printf("[%s] launch=%d sync=%d value=%u\n", tag, (int)re, (int)se, val); fflush(stdout);
+				hipFree(buf);
+			};
+			rawCore("rung-a-control",   false, false, false);
+			rawCore("rung-b-ring",      false, false, true);
+			rawCore("rung-c-tsBefore",  true,  false, false);
+			rawCore("rung-d-tsBoth",    true,  true,  false);
+			printf("[rung-e-launch-plain]\n"); fflush(stdout);
+			prog->launch("kernel_dummy", {&dummydata}, 1);
+			hipError_t se = hipDeviceSynchronize();
+			printf("[rung-e-done] sync=%d\n", (int)se); fflush(stdout);
+		}
+		else if(!skipK("dummy")) prog->launch("kernel_dummy", {&dummydata}, 1);
 		
 		{ // resize and clear cuda framebuffer
 			uint32_t clearColor = 0xff000000;

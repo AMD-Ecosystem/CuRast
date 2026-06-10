@@ -454,7 +454,7 @@ namespace largeGlb{
 				size_indexbuffer_gltf += task.byteSize;
 				
 				pool.enqueue([&, this, task](int threadIndex){
-					cuCtxSetCurrent(context);
+					if(context){ cuCtxSetCurrent(context); }
 
 					gltfloader::Accessor accessor = gltf.accessors[task.accessorIndex];
 					gltfloader::BufferView view = gltf.bufferViews[accessor.bufferView];
@@ -550,7 +550,7 @@ namespace largeGlb{
 			for(auto task : imageLoadTasks){
 
 				pool.enqueue([&, task](int threadIndex){
-					cuCtxSetCurrent(context);
+					if(context){ cuCtxSetCurrent(context); }
 
 					gltfloader::Image& image = gltf.images[task.imageIndex];
 					gltfloader::BufferView& view = gltf.bufferViews[image.bufferView];
@@ -634,7 +634,7 @@ namespace largeGlb{
 				size_positions_gltf += task.byteSize;
 				
 				pool.enqueue([=, this, &gpu_memory_counter, &size_positions_curast](int threadIndex){
-					cuCtxSetCurrent(context);
+					if(context){ cuCtxSetCurrent(context); }
 
 					gltfloader::Accessor accessor = gltf.accessors[task.accessorIndex];
 					uint64_t numVertices = accessor.count;
@@ -759,7 +759,7 @@ namespace largeGlb{
 					uint64_t byteSize = accessor.getByteSize();
 					
 					pool.enqueue([=, &gpu_memory_counter](int threadIndex){
-						cuCtxSetCurrent(context);
+						if(context){ cuCtxSetCurrent(context); }
 
 						uint64_t numVertices = accessor.count;
 						PinnedBuffer pinned = pinnedBuffers[threadIndex];
@@ -902,7 +902,7 @@ namespace largeGlb{
 					if(bufferView.byteStride != -1) sourceByteStride = bufferView.byteStride;
 					
 					pool.enqueue([=, &gpu_memory_counter](int threadIndex){
-						cuCtxSetCurrent(context);
+						if(context){ cuCtxSetCurrent(context); }
 
 						uint64_t numVertices = accessor.count;
 						PinnedBuffer pinned = pinnedBuffers[threadIndex];
@@ -993,7 +993,7 @@ namespace largeGlb{
 					task.byteSize = accessor.getByteSize();
 					
 					pool.enqueue([=, this, &gpu_memory_counter](int threadIndex){
-						cuCtxSetCurrent(context);
+						if(context){ cuCtxSetCurrent(context); }
 
 						gltfloader::Accessor accessor = gltf.accessors[task.accessorIndex];
 						uint64_t numVertices = accessor.count;

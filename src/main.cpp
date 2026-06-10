@@ -58,7 +58,11 @@ void initCuda() {
 #if defined(USE_HIP)
 	hipInit(0);
 	hipDeviceGet(&CURuntime::device, 0);
-	hipCtxCreate(&context, 0, CURuntime::device);
+	// Use the primary context: the deprecated explicit hipCtxCreate context
+	// breaks regular hipModuleLaunchKernel dispatches on ROCm 7.2 (cooperative
+	// launches work; regular ones memory-fault).
+	hipSetDevice(CURuntime::device);
+	context = nullptr;
 #else
 	cuInit(0);
 	CUctxCreateParams creation_params = {};

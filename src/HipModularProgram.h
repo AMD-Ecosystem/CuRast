@@ -22,6 +22,7 @@
 #include "Timer.h"
 
 #include <hip/hip_runtime.h>
+#include <hip/hip_ext.h>
 #include <hip/hiprtc.h>
 
 using std::string;
@@ -358,11 +359,53 @@ struct HipModularProgram{
         // Note: HIP doesn't have hipModuleGetFunctionCount in all versions
         // Kernels will be looked up by name on first use via getKernel()
 
+        if(getenv("CURAST_RAW_TEST")){
+            auto rawLaunch = [&](const char* tag, hipFunction_t rf){
+                if(!rf){ printf("[%s] no function\n", tag); fflush(stdout); return; }
+                unsigned int* rawBuf = nullptr;
+                hipMalloc(&rawBuf, 16); hipMemset(rawBuf, 0, 16);
+                void* rargs[] = { &rawBuf };
+                hipError_t re = hipModuleLaunchKernel(rf, 1,1,1, 256,1,1, 0, 0, rargs, nullptr);
+                hipError_t se = hipDeviceSynchronize();
+                unsigned int v = 0;
+                hipMemcpy(&v, rawBuf, 4, hipMemcpyDeviceToHost);
+                printf("[%s] launch=%d sync=%d value=%u (expect 123)\n", tag, (int)re, (int)se, v);
+                fflush(stdout);
+                hipFree(rawBuf);
+            };
+            // 1: the app's ORIGINAL module, fresh function handle
+            hipFunction_t f1 = nullptr;
+            if(mod) hipModuleGetFunction(&f1, mod, "kernel_dummy");
+            rawLaunch("raw-origmod", f1);
+            // 2: the app's getKernel cached handle (events created too)
+            rawLaunch("raw-getKernel", getKernel("kernel_dummy"));
+            // 3: fresh second load of the same bytes (the known-good control)
+            hipModule_t rawMod = nullptr;
+            hipModuleLoadData(&rawMod, codeObject);
+            hipFunction_t f3 = nullptr;
+            if(rawMod) hipModuleGetFunction(&f3, rawMod, "kernel_dummy");
+            rawLaunch("raw-freshmod", f3);
+            if(rawMod) hipModuleUnload(rawMod);
+        }
+
         for(auto& callback : compileCallbacks){
             callback();
         }
 
         printElapsedTime("HIP compile+link duration: ", tStart);
+    }
+
+    void rawDummyTest(const char* tag, const string& name){
+        hipFunction_t rf = getKernel(name);
+        if(!rf){ printf("[%s] no function\n", tag); fflush(stdout); return; }
+        unsigned int* rawBuf = nullptr;
+        hipMalloc(&rawBuf, 16); hipMemset(rawBuf, 0, 16);
+        void* rargs[] = { &rawBuf };
+        hipError_t re = hipModuleLaunchKernel(rf, 1,1,1, 256,1,1, 0, 0, rargs, nullptr);
+        hipError_t se = hipDeviceSynchronize();
+        unsigned int v = 0; hipMemcpy(&v, rawBuf, 4, hipMemcpyDeviceToHost);
+        printf("[%s] launch=%d sync=%d value=%u\n", tag, (int)re, (int)se, v); fflush(stdout);
+        hipFree(rawBuf);
     }
 
     hipFunction_t getKernel(const string& name){
@@ -414,14 +457,27 @@ struct HipModularProgram{
         launches_per_frame[kernelName]++;
     }
 
+    // ROCm's hipModuleLaunchKernel can consume kernelParams after the API call
+    // returns (deferred packet submission), unlike CUDA which copies them
+    // synchronously. Keep each launch's parameter array alive in a ring so the
+    // runtime never reads a freed vector or popped stack frame.
+    static void** keepAliveArgs(void** args, size_t n){
+        static std::deque<std::vector<void*>> ring;
+        static mutex ringMtx;
+        lock_guard<mutex> lock(ringMtx);
+        ring.emplace_back(args, args + n);
+        if(ring.size() > 4096) ring.pop_front();
+        return ring.back().data();
+    }
+
     static void dbgLaunch(const string& kernelName){
         static bool dbg = getenv("CURAST_DEBUG_LAUNCH") != nullptr;
         if(dbg){ printf("[launch] %s\n", kernelName.c_str()); fflush(stdout); }
     }
 
     void launch(string kernelName, vector<void*> args, OptionalLaunchSettings launchArgs = {}){
-        void** _args = &args[0];
-        this->launch(kernelName, _args, launchArgs);
+        if(args.empty()) return;
+        this->launch(kernelName, keepAliveArgs(args.data(), args.size()), launchArgs);
     }
 
     void launch(string kernelName, void** args, OptionalLaunchSettings launchArgs){
@@ -447,38 +503,27 @@ struct HipModularProgram{
     }
 
     void launch(string kernelName, vector<void*> args, int count, hipStream_t stream = 0){
-        if(count == 0) return;
-        void** _args = &args[0];
-        this->launch(kernelName, _args, count, stream);
+        if(count == 0 || args.empty()) return;
+        this->launch(kernelName, keepAliveArgs(args.data(), args.size()), count, stream);
     }
 
-    void launch(string kernelName, void** args, int count, hipStream_t stream = 0){
-        dbgLaunch(kernelName);
-        if (count == 0) return;
+    static bool noTimer(){ static bool v = getenv("CURAST_LAUNCH_NOTIMER") != nullptr; return v; }
 
+    void launch(string kernelName, void** args, int count, hipStream_t stream = 0){
+        if (count == 0) return;
         uint32_t blockSize = 256;
         uint32_t gridSize = (count + blockSize - 1) / blockSize;
-
-        auto custart = Timer::recordCudaTimestamp();
-
         hipFunction_t func = getKernel(kernelName);
         if(!func) return;
-
-        auto res_launch = hipModuleLaunchKernel(func,
-            gridSize, 1, 1,
-            blockSize, 1, 1,
-            0, stream, args, nullptr);
-
-        if(res_launch != hipSuccess){
-            hip_checked(res_launch);
-        }
-
-        Timer::recordDuration(kernelName, custart, Timer::recordCudaTimestamp());
+        hipError_t re = hipModuleLaunchKernel(func, gridSize,1,1, blockSize,1,1, 0, stream, args, nullptr);
+        if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[launch-min] %s -> %d\n", kernelName.c_str(), (int)re); fflush(stdout); }
     }
 
     void launch2D(string kernelName, void** args, int width, int height, hipStream_t stream = 0){
         dbgLaunch(kernelName);
         if (width == 0 || height == 0) return;
+        // callers pass stack arrays of <=11 args; pin a copy (see keepAliveArgs)
+        args = keepAliveArgs(args, 12);
 
         uint32_t blockSize = 8;
         uint32_t gridSizeX = (width + blockSize - 1) / blockSize;
@@ -489,10 +534,10 @@ struct HipModularProgram{
         hipFunction_t func = getKernel(kernelName);
         if(!func) return;
 
-        auto res_launch = hipModuleLaunchKernel(func,
-            gridSizeX, gridSizeY, 1,
+        auto res_launch = hipExtModuleLaunchKernel(func,
+            (size_t)gridSizeX * blockSize, (size_t)gridSizeY * blockSize, 1,
             blockSize, blockSize, 1,
-            0, stream, args, nullptr);
+            0, stream, args, nullptr, nullptr, nullptr, 0);
 
         if (res_launch != hipSuccess) {
             const char* str = hipGetErrorString(res_launch);
@@ -507,8 +552,8 @@ struct HipModularProgram{
     }
 
     void launchCooperative(string kernelName, vector<void*> args, OptionalLaunchSettings launchArgs = {}){
-        void** _args = &args[0];
-        this->launchCooperative(kernelName, _args, launchArgs);
+        if(args.empty()) return;
+        this->launchCooperative(kernelName, keepAliveArgs(args.data(), args.size()), launchArgs);
     }
 
     void launchCooperative(string kernelName, void** args, OptionalLaunchSettings launchArgs = {}){
@@ -534,6 +579,12 @@ struct HipModularProgram{
 
         numBlocks *= numSMs;
         numBlocks = std::clamp(numBlocks, 10, 100'000);
+
+        // Drain the stream before a cooperative launch: ROCm 7.2 does not
+        // reliably fence the cooperative gang against in-flight regular
+        // kernels on the same stream, and co-scheduling them memory-faults
+        // or deadlocks the gang's grid sync.
+        hipStreamSynchronize(launchArgs.stream);
 
         auto res_launch = hipModuleLaunchCooperativeKernel(func,
             numBlocks, 1, 1,
