@@ -328,7 +328,7 @@ __device__ vec3 ssao_normal(int x, int y, float d0, uint64_t* cb, int w, int h) 
 	float dv = use_down  ? dd : du;
 
 	// Fallback if a neighbor is missing (silhouette against sky)
-	if (isinf(dh) || isinf(dv)) return vec3(0.0f, 0.0f, -1.0f);
+	if (__builtin_isinf(dh) || __builtin_isinf(dv)) return vec3(0.0f, 0.0f, -1.0f);
 
 	vec3 P  = ssao_viewPos(float(x),       float(y),       d0, w, h);
 	vec3 Ph = ssao_viewPos(float(x + sx),  float(y),       dh, w, h);
@@ -365,7 +365,7 @@ __device__ float getSSAOShadingFactor(
 	int width, int height,
 	float /* focal_length — kept for API compatibility; use c_target.proj directly */
 ) {
-	if (isinf(center_depth) || center_depth <= 0.0f) return 1.0f;
+	if (__builtin_isinf(center_depth) || center_depth <= 0.0f) return 1.0f;
 
 	// ── Tuning ──────────────────────────────────────────────────────────────
 	const int   NUM_SAMPLES     = 32;
@@ -437,7 +437,7 @@ __device__ float getSSAOShadingFactor(
 		int  sy = clamp(int(sp.y), 0, height - 1);
 
 		float actual_depth = __uint_as_float(colorbuffer[sy * width + sx] >> 32);
-		if (isinf(actual_depth)) continue;   // sky / background
+		if (__builtin_isinf(actual_depth)) continue;   // sky / background
 
 		// Tangent-plane reference: the depth the current surface is expected to
 		// have at (sx, sy) if it were smooth.  Comparing actual_depth against
@@ -497,7 +497,7 @@ void kernel_enlarge(
 			
 			// add offsets to the depth of points, based on how far they are from the center
 			float depth = __uint_as_float(pixel >> 32);
-			if(!isinf(depth)){
+			if(!__builtin_isinf(depth)){
 				uint64_t color = pixel & 0xffffffff;
 				float f = 0.01f * abs(dx * dx) + 1.0f;
 				depth = depth * f;
@@ -534,7 +534,7 @@ void kernel_enlarge(
 
 			// add offsets to the depth of points, based on how far they are from the center
 			float depth = __uint_as_float(pixel >> 32);
-			if(!isinf(depth)){
+			if(!__builtin_isinf(depth)){
 				uint64_t color = pixel & 0xffffffff;
 				float f = 0.01f * abs(dy * dy) + 1.0f;
 				depth = depth * f;
@@ -598,7 +598,7 @@ void kernel_ssaoBlur(
 	float center_depth = __uint_as_float(occlusionBuffer[centerIdx] >> 32);
 
 	// Background / sky pixel — no occlusion
-	if(isinf(center_depth)){
+	if(__builtin_isinf(center_depth)){
 		ssaoShadeBuffer[centerIdx] = 1.0f;
 		return;
 	}
@@ -734,7 +734,7 @@ void kernel_resolve_visbuffer_to_colorbuffer2D(
 	uint32_t color = 0;
 	uint8_t *rgb = (uint8_t *)&color;
 
-	if(!isinf(depth)){
+	if(!__builtin_isinf(depth)){
 		CMesh mesh = meshes[meshIndex];
 		uint32_t triangleIndex = totalTriangleIndex - mesh.cummulativeTriangleCount;
 
@@ -1204,7 +1204,7 @@ void kernel_resolve_colorbuffer_to_opengl_2D(
 				ssao = ssaoShadeBuffer[pixelID] * 0.4f + 0.6f;
 			}
 
-			if(isinf(depth)) sampleColor = backgroundColor;
+			if(__builtin_isinf(depth)) sampleColor = backgroundColor;
 
 			float shade = edl * ssao;
 
@@ -1294,7 +1294,7 @@ void kernel_resolve_colorbuffer_to_opengl_2D(
 			color.g += (C >>  8) & 0xff;
 			color.b += (C >> 16) & 0xff;
 
-			if(isinf(depth)){
+			if(__builtin_isinf(depth)){
 				color.r += (BACKGROUND_COLOR >>  0) & 0xff;
 				color.g += (BACKGROUND_COLOR >>  8) & 0xff;
 				color.b += (BACKGROUND_COLOR >> 16) & 0xff;
@@ -1374,7 +1374,7 @@ void kernel_resolve_colorbuffer_to_screenshot(
 		ssao = ssaoShadeBuffer[pixelID] * 0.4f + 0.6f;
 	}
 
-	if(isinf(depth)) color = backgroundColor;
+	if(__builtin_isinf(depth)) color = backgroundColor;
 
 	float shade = edl * ssao;
 	uint8_t* rgba = (uint8_t*)&color;
@@ -1670,7 +1670,7 @@ void kernel_resolve_jpeg(
 	uint32_t color = 0;
 	uint8_t *rgb = (uint8_t *)&color;
 
-	if(!isinf(depth)){
+	if(!__builtin_isinf(depth)){
 		CMesh mesh = meshes[meshIndex];
 		uint32_t triangleIndex = totalTriangleIndex - mesh.cummulativeTriangleCount;
 

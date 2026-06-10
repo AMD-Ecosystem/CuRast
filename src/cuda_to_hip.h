@@ -12,6 +12,17 @@
 #if !defined(__HIPCC_RTC__)
 #include <hip/hip_runtime.h>
 #include <hip/hip_cooperative_groups.h>
+#else
+// hiprtc provides the core device runtime but not these CUDA-style bit-cast
+// intrinsics (they normally come from hip_runtime.h, skipped above under RTC).
+// Defined as macros (not inline functions) because in one combined hiprtc TU
+// this header is reached via two relative paths (src/jpeg/../, src/kernels/../)
+// and #pragma once does not dedupe; identical macro redefinition is allowed,
+// whereas duplicate function definitions are an error.
+#define __float_as_uint(x) __builtin_bit_cast(unsigned int, (float)(x))
+#define __float_as_int(x)  __builtin_bit_cast(int, (float)(x))
+#define __uint_as_float(x) __builtin_bit_cast(float, (unsigned int)(x))
+#define __int_as_float(x)  __builtin_bit_cast(float, (int)(x))
 #endif
 
 // Runtime API aliases
