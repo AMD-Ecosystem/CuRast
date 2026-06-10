@@ -241,7 +241,10 @@ struct HipModularProgram{
         // Build compiler options
         vector<string> optStrings;
         optStrings.push_back("--std=c++20");
-        optStrings.push_back("-ffast-math");
+        // No -ffast-math: clang's fast-math implies -ffinite-math-only, which
+        // breaks this pipeline's Infinity depth sentinels and NaN clear values
+        // (nvcc --use_fast_math does not assume finite math). The compiler
+        // warns "use of infinity is undefined behavior" under it.
         optStrings.push_back("-ferror-limit=0");
         if(getenv("CURAST_DEBUG_LAUNCH")){ optStrings.push_back("-g"); }
 
@@ -312,8 +315,9 @@ struct HipModularProgram{
         size_t logSize;
         HIPRTC_SAFE_CALL(hiprtcGetProgramLogSize(prog, &logSize));
         if(logSize > 1){
-            char* log = new char[logSize];
+            char* log = new char[logSize + 1];
             HIPRTC_SAFE_CALL(hiprtcGetProgramLog(prog, log));
+            log[logSize] = 0;
             println("Compilation log: {}", log);
             delete[] log;
         }
@@ -515,8 +519,11 @@ struct HipModularProgram{
         uint32_t gridSize = (count + blockSize - 1) / blockSize;
         hipFunction_t func = getKernel(kernelName);
         if(!func) return;
-        hipError_t re = hipModuleLaunchKernel(func, gridSize,1,1, blockSize,1,1, 0, stream, args, nullptr);
-        if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[launch-min] %s -> %d\n", kernelName.c_str(), (int)re); fflush(stdout); }
+        hipModuleLaunchKernel(func, gridSize,1,1, blockSize,1,1, 0, stream, args, nullptr);
+        // Invariant from the fault bisection: every dispatch that completed
+        // before further host work succeeded; every one left in flight
+        // memory-faulted. Drain immediately until the root cause is found.
+        hipStreamSynchronize(stream);
     }
 
     void launch2D(string kernelName, void** args, int width, int height, hipStream_t stream = 0){
@@ -534,10 +541,11 @@ struct HipModularProgram{
         hipFunction_t func = getKernel(kernelName);
         if(!func) return;
 
-        auto res_launch = hipExtModuleLaunchKernel(func,
-            (size_t)gridSizeX * blockSize, (size_t)gridSizeY * blockSize, 1,
+        auto res_launch = hipModuleLaunchKernel(func,
+            gridSizeX, gridSizeY, 1,
             blockSize, blockSize, 1,
-            0, stream, args, nullptr, nullptr, nullptr, 0);
+            0, stream, args, nullptr);
+        hipStreamSynchronize(stream);
 
         if (res_launch != hipSuccess) {
             const char* str = hipGetErrorString(res_launch);
