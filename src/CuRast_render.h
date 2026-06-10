@@ -12,9 +12,11 @@ using namespace std;
 CudaVirtualMemory* cvm_framebuffer = nullptr;
 CudaVirtualMemory* cvm_colorbuffer = nullptr;
 bool initialized = false;
-// Inline raw dispatch: the only launch form that has never faulted in this
-// process (dispatches via HipModularProgram::launch fault; identical inline
-// code passes -- under investigation, see bench notes).
+// Dispatch these kernels inline at the call site. On ROCm 7.2 / gfx90a,
+// dispatches issued through HipModularProgram::launch()/launch2D for this
+// module intermittently raise GPU memory faults while identical inline
+// dispatch sequences are reliable; cause not yet isolated (kernel arguments,
+// timing instrumentation, launch API and module identity were all ruled out).
 #define INLINE_LAUNCH_1D(prog_, name_, argsArr_, count_) do { \
 	hipFunction_t f_ = (prog_)->getKernel(name_); \
 	if(f_){ \
@@ -32,11 +34,6 @@ bool initialized = false;
 	} \
 } while(0)
 
-static bool skipK(const char* name){
-	if(getenv("CURAST_SKIP_RESOLVE")) return true;
-	static std::string list = getenv("CURAST_SKIP") ? getenv("CURAST_SKIP") : "";
-	return list.find(name) != std::string::npos;
-}
 JpegTextures* jpegTextures = nullptr;
 
 // Cuda-Vulkan interop
@@ -172,11 +169,6 @@ void drawTrianglesVisbuffer(
 	args.target                          = target;
 	args.state                           = (DeviceState*)CuRast::instance->cptr_state;
 	
-	if(getenv("CURAST_TEST_DUMMY2")){
-		printf("[step] launching dummy2 (regular launch, visbuffer module)\n"); fflush(stdout);
-		prog->launch("kernel_dummy2", {&cptr_numProcessedBatches}, 1);
-		printf("[step] dummy2 returned\n"); fflush(stdout);
-	}
 	prog->launchCooperative(strKernelStage1, vector<void*>{&args}, {.blocksize = TRIANGLES_PER_SWEEP});
 	prog->launchCooperative(strKernelStage2, vector<void*>{&args});
 	prog->launchCooperative(strKernelStage3, vector<void*>{&args}, {.blocksize = 64});
@@ -405,94 +397,35 @@ void CuRast::draw(Scene* scene, vector<View> views){
 			mappings = mapCudaVk(attachments);
 		}
 
-		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] compile resolve module\n"); fflush(stdout); }
 		static CudaModularProgram* prog = new CudaModularProgram({"./src/kernels/resolve.cu",});
 		// memcpy arguments to constant buffer
 		CUdeviceptr cptr_target = prog->getGlobalsPointer("c_target");
-		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] c_target ptr=%p, uploading %zu bytes\n", (void*)cptr_target, sizeof(target)); fflush(stdout); }
-		static bool skipCtarget = getenv("CURAST_SKIP_CTARGET") != nullptr;
-		if(cptr_target && !skipCtarget){ cuMemcpyHtoDAsync(cptr_target, &target, sizeof(target), 0); }
+		if(cptr_target){ cuMemcpyHtoDAsync(cptr_target, &target, sizeof(target), 0); }
 
 		// Let the first kernel in the frame be a dummy kernel to take the hit for CUDA-OpenGL interop overhead
 		// (so that we get more accurate timings for the other kernels)
 		static CUdeviceptr dummydata = MemoryManager::alloc(16, "dummydata");
-		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] launch dummy\n"); fflush(stdout); }
-		if(getenv("CURAST_LADDER")){
-			prog->rawDummyTest("rung1-raw-here", "kernel_dummy");
-			{
-				void* stackArgs[1] = { &dummydata };
-				hipFunction_t f = prog->getKernel("kernel_dummy");
-				hipError_t re = f ? hipModuleLaunchKernel(f, 1,1,1, 256,1,1, 0, 0, stackArgs, nullptr) : hipErrorInvalidValue;
-				hipError_t se = hipDeviceSynchronize();
-				printf("[rung2-raw-dummydata] launch=%d sync=%d\n", (int)re, (int)se); fflush(stdout);
-			}
-			// incremental ladder: add launch()'s operations to the raw core one at a time
-			auto rawCore = [&](const char* tag, bool tsBefore, bool tsAfter, bool viaRing){
-				unsigned int* buf = nullptr; hipMalloc(&buf, 16); hipMemset(buf, 0, 16);
-				void* localArgs[1] = { &buf };
-				void** useArgs = localArgs;
-				if(viaRing){
-					vector<void*> v = { &buf };
-					useArgs = HipModularProgram::keepAliveArgs(v.data(), v.size());
-				}
-				hipFunction_t f = prog->getKernel("kernel_dummy");
-				Timer::Timestamp t0, t1;
-				if(tsBefore) t0 = Timer::recordCudaTimestamp();
-				hipError_t re = hipModuleLaunchKernel(f, 1,1,1, 256,1,1, 0, 0, useArgs, nullptr);
-				if(tsAfter){ t1 = Timer::recordCudaTimestamp(); Timer::recordDuration("ladder", t0, t1); }
-				hipError_t se = hipDeviceSynchronize();
-				unsigned int val = 0; hipMemcpy(&val, buf, 4, hipMemcpyDeviceToHost);
-				printf("[%s] launch=%d sync=%d value=%u\n", tag, (int)re, (int)se, val); fflush(stdout);
-				hipFree(buf);
-			};
-			printf("[rung-0-launch-FIRST]\n"); fflush(stdout);
-			prog->launch("kernel_dummy", {&dummydata}, 1);
-			{
-				hipError_t se0 = hipDeviceSynchronize();
-				unsigned int dv0 = 0; cuMemcpyDtoH(&dv0, dummydata, 4);
-				printf("[rung-0-done] sync=%d dummydata=%u\n", (int)se0, dv0); fflush(stdout);
-			}
-			rawCore("rung-a-control",   false, false, false);
-			rawCore("rung-b-ring",      false, false, true);
-			{
-				// matrix completion: ring-args + dummydata (the faulting path's combo), raw
-				vector<void*> v = { &dummydata };
-				void** ringArgs = HipModularProgram::keepAliveArgs(v.data(), v.size());
-				hipFunction_t f = prog->getKernel("kernel_dummy");
-				hipError_t re = hipModuleLaunchKernel(f, 1,1,1, 256,1,1, 0, 0, ringArgs, nullptr);
-				hipError_t se = hipDeviceSynchronize();
-				unsigned int val = 0; cuMemcpyDtoH(&val, dummydata, 4);
-				printf("[rung-c2-ring-dummydata] launch=%d sync=%d value=%u\n", (int)re, (int)se, val); fflush(stdout);
-			}
-			printf("[rung-e-launch-plain]\n"); fflush(stdout);
-			prog->launch("kernel_dummy", {&dummydata}, 1);
-			hipError_t se = hipDeviceSynchronize();
-			unsigned int dval = 0; cuMemcpyDtoH(&dval, dummydata, 4);
-			printf("[rung-e-done] sync=%d dummydata=%u\n", (int)se, dval); fflush(stdout);
-		}
-		else if(!skipK("dummy")){ void* dargs_[1] = { &dummydata }; INLINE_LAUNCH_1D(prog, "kernel_dummy", dargs_, 1); }
+		{ void* dargs_[1] = { &dummydata }; INLINE_LAUNCH_1D(prog, "kernel_dummy", dargs_, 1); }
 		
 		{ // resize and clear cuda framebuffer
 			uint32_t clearColor = 0xff000000;
 			float clearDepth = Infinity;
 
 			uint64_t requiredBytes = numPixels * 8;
-			if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] commit framebuffers\n"); fflush(stdout); }
 			cvm_framebuffer->commit(requiredBytes);
 			cvm_colorbuffer->commit(requiredBytes);
 
-			if(!skipK("clear")){
+			{
 				void* cargs_[4] = { &cvm_framebuffer->cptr, &numPixels, &clearColor, &clearDepth };
 				INLINE_LAUNCH_1D(prog, "kernel_clearFramebuffer", cargs_, numPixels);
 			}
 
-			if(!skipK("clear")){
+			{
 				void* cargs2_[4] = { &cvm_colorbuffer->cptr, &numPixels, &clearColor, &clearDepth };
 				INLINE_LAUNCH_1D(prog, "kernel_clearFramebuffer", cargs2_, numPixels);
 			}
 		}
 
-		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] drawTrianglesVisbuffer\n"); fflush(stdout); }
 		drawTrianglesVisbuffer(
 			scene, view, meshes_unique, meshes_allInstances, 
 			cvm_meshes->cptr, 
@@ -570,8 +503,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 				&rasterSettings,
 				&jpp,
 			};
-			if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] resolve visbuffer->colorbuffer\n"); fflush(stdout); }
-			if(!skipK("resolve2d")) INLINE_LAUNCH_2D(prog, "kernel_resolve_visbuffer_to_colorbuffer2D", args, target.width, target.height);
+			INLINE_LAUNCH_2D(prog, "kernel_resolve_visbuffer_to_colorbuffer2D", args, target.width, target.height);
 		}
 
 		if(hasJpegCompressedTextures){
@@ -740,7 +672,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 			prog->launch2D("kernel_resolve_colorbuffer_to_opengl_2D", args, target.width, target.height);
 		}
 
-		if(CuRastSettings::requestScreenshot && !skipK("screenshot")){
+		if(CuRastSettings::requestScreenshot){
 			saveScreenshot(target, view, cvm_ssaoShadebuffer->cptr, prog);
 		}
 
@@ -785,21 +717,7 @@ void CuRast::renderHeadless(int W, int H, bool screenshot){
 	CuRastSettings::requestScreenshot = screenshot ? make_shared<string>("./bench_render.png") : nullptr;
 
 	Timer::enabled = true;
-	if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] renderHeadless: draw begin\n"); fflush(stdout); }
 	draw(&scene, { VKRenderer::view });
-
-	if(getenv("CURAST_DEBUG_LAUNCH")){
-		int cx = VKRenderer::width/2, cy = VKRenderer::height/2;
-		uint64_t pid = (uint64_t)cy * VKRenderer::width + cx;
-		uint64_t fb = 0, cb = 0;
-		cuMemcpyDtoH(&fb, (CUdeviceptr)((uint8_t*)cvm_framebuffer->cptr + pid*8), 8);
-		cuMemcpyDtoH(&cb, (CUdeviceptr)((uint8_t*)cvm_colorbuffer->cptr + pid*8), 8);
-		uint64_t cb1 = 0, cb2 = 0;
-		cuMemcpyDtoH(&cb1, (CUdeviceptr)((uint8_t*)cvm_colorbuffer->cptr + 8), 8);
-		cuMemcpyDtoH(&cb2, (CUdeviceptr)((uint8_t*)cvm_colorbuffer->cptr + 16), 8);
-		printf("[probe] center fb=%016llx cb=%016llx | kernel-sees: dims=%016llx fbptr=%016llx (host fbptr=%p)\n",
-			(unsigned long long)fb, (unsigned long long)cb, (unsigned long long)cb1, (unsigned long long)cb2, (void*)cvm_framebuffer->cptr); fflush(stdout);
-	}
 
 	lastFrameMs = 0.0;
 	for(auto& r : Timer::resolve()){

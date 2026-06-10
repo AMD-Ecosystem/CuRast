@@ -835,11 +835,6 @@ void stage3_drawHugeTriangles(RasterArgs args){
 #pragma clang attribute pop
 #endif
 extern "C" __global__
-void kernel_dummy2(uint32_t* data){
-	if(threadIdx.x == 0 && blockIdx.x == 0) *data = 7;
-}
-
-extern "C" __global__
 void kernel_stage1_drawSmallTriangles_indexbuffer_uncompressed(RasterArgs args){
 	stage1_drawSmallTriangles<IndexFetch::INDEXBUFFER, Compression::UNCOMPRESSED, Instancing::NO>(args);
 }

@@ -446,28 +446,9 @@ int main(int argc, char** argv){
 		Runtime::controls->target = { center.x, center.y, center.z };
 		println("[bench] {}x{} {} frames, model extent {:.1f}", benchW, benchH, benchFrames, length(extent));
 	
-		{
-			SNTriangles* firstTri = nullptr;
-			editor->scene.forEach<SNTriangles>([&](SNTriangles* n){ if(!firstTri) firstTri = n; });
-			if(firstTri && firstTri->mesh){
-				vec3 p[3] = {};
-				cuMemcpyDtoH(p, firstTri->mesh->cptr_position, sizeof(p));
-				println("[bench] mesh: numTris={} isLoaded={} vtx0=({:.2f},{:.2f},{:.2f}) vtx1=({:.2f},{:.2f},{:.2f})",
-					firstTri->mesh->numTriangles, firstTri->mesh->isLoaded, p[0].x,p[0].y,p[0].z, p[1].x,p[1].y,p[1].z);
-			}
-		}
-
 		Runtime::controls->update();
 		VKRenderer::camera->world = Runtime::controls->world;
 		VKRenderer::camera->update();
-
-		{
-			glm::dvec4 clip = VKRenderer::camera->proj * VKRenderer::camera->view * glm::dvec4(center.x, center.y, center.z, 1.0);
-			glm::dvec3 ndc = glm::dvec3(clip) / clip.w;
-			glm::dvec3 eye = glm::dvec3(VKRenderer::camera->world * glm::dvec4(0,0,0,1));
-			println("[bench] cam eye=({:.1f},{:.1f},{:.1f}) target=({:.1f},{:.1f},{:.1f}) center-NDC=({:.3f},{:.3f},{:.3f}) clipw={:.2f}",
-				eye.x, eye.y, eye.z, center.x, center.y, center.z, ndc.x, ndc.y, ndc.z, clip.w);
-		}
 
 		double best = 1e30;
 		for(int f = 0; f < benchFrames; f++){
