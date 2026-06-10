@@ -50,6 +50,8 @@ void unmapCudaVk(MappedTextures& mappings){
 
 void saveScreenshot(RenderTarget target, View view, CUdeviceptr cptr_ssaoShadebuffer, CudaModularProgram* prog_resolve){
 
+	int ssW = view.framebuffer ? view.framebuffer->width  : VKRenderer::width;
+	int ssH = view.framebuffer ? view.framebuffer->height : VKRenderer::height;
 	uint64_t numPixels = target.width * target.height;
 	CUdeviceptr cptr_screenshot = MemoryManager::alloc(numPixels * 4, "screenshot");
 
@@ -65,8 +67,8 @@ void saveScreenshot(RenderTarget target, View view, CUdeviceptr cptr_ssaoShadebu
 		&cptr_ssaoShadebuffer,
 		&CuRastSettings::enableEDL,
 		&CuRastSettings::enableSSAO,
-		&view.framebuffer->width,
-		&view.framebuffer->height,
+		&ssW,
+		&ssH,
 		&backgroundColor
 	};
 	prog_resolve->launch2D("kernel_resolve_colorbuffer_to_screenshot", args, target.width, target.height);
@@ -171,8 +173,10 @@ void CuRast::draw(Scene* scene, vector<View> views){
 	RenderTarget target;
 	target.framebuffer = (uint64_t*)cvm_framebuffer->cptr;
 	target.colorbuffer = (uint64_t*)cvm_colorbuffer->cptr;
-	target.width = supersamplingFactor * view.framebuffer->width;
-	target.height = supersamplingFactor * view.framebuffer->height;
+	int fbW = view.framebuffer ? view.framebuffer->width  : VKRenderer::width;
+	int fbH = view.framebuffer ? view.framebuffer->height : VKRenderer::height;
+	target.width = supersamplingFactor * fbW;
+	target.height = supersamplingFactor * fbH;
 	target.view = view.view;
 	target.viewI = viewI;
 	target.proj = view.proj;
@@ -365,8 +369,11 @@ void CuRast::draw(Scene* scene, vector<View> views){
 
 		int numPixels = target.width * target.height;
 
-		vector<shared_ptr<VKTexture>> attachments = {view.framebuffer->colorAttachment};
-		auto mappings = mapCudaVk(attachments);
+		MappedTextures mappings;
+		if(view.framebuffer){
+			vector<shared_ptr<VKTexture>> attachments = {view.framebuffer->colorAttachment};
+			mappings = mapCudaVk(attachments);
+		}
 
 		static CudaModularProgram* prog = new CudaModularProgram({"./src/kernels/resolve.cu",});
 		// memcpy arguments to constant buffer
@@ -621,7 +628,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 		// 	&CuRastSettings::enableSSAO,
 		// });
 
-		{ // RESOLVE COLOR BUFFER (write to graphics API framebuffer)
+		if(view.framebuffer && !mappings.surfaces.empty()){ // RESOLVE COLOR BUFFER (write to graphics API framebuffer)
 			int viewWidth = view.framebuffer->width;
 			int viewHeight = view.framebuffer->height;
 
@@ -678,6 +685,20 @@ void initialize(){
 	jpegTextures = new JpegTextures();
 
 	initialized = true;
+}
+
+void CuRast::renderHeadless(int W, int H, bool screenshot){
+	VKRenderer::width = W;
+	VKRenderer::height = H;
+	initialize();
+
+	VKRenderer::view.framebuffer = nullptr;
+	VKRenderer::view.view = VKRenderer::camera->view;
+	VKRenderer::view.proj = VKRenderer::camera->proj;
+
+	CuRastSettings::requestScreenshot = screenshot ? make_shared<string>("./bench_render.png") : nullptr;
+
+	draw(&scene, { VKRenderer::view });
 }
 
 void CuRast::render(){

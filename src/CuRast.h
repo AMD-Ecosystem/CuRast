@@ -78,5 +78,6 @@ struct CuRast{
 	void render();
 	void postFrame();
 	void draw(Scene* scene, vector<View> views);
+	void renderHeadless(int width, int height, bool screenshot);
 
 };

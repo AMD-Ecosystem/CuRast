@@ -242,13 +242,39 @@ struct HipModularProgram{
         optStrings.push_back("--std=c++20");
         optStrings.push_back("-ffast-math");
 
-        // Add include paths
+        // Add include paths (absolute: comgr does not reliably resolve relative
+        // -I against the launching CWD, and some kernel headers include siblings
+        // in other source dirs via a "./" path).
         for(const string& dir : includeDirs){
-            optStrings.push_back("-I" + dir);
+            optStrings.push_back("-I" + fs::absolute(dir).string());
         }
-        optStrings.push_back("-I./");
-        optStrings.push_back("-I./include");
-        optStrings.push_back("-I./libs");
+        optStrings.push_back("-I" + fs::absolute("./src").string());
+        optStrings.push_back("-I" + fs::absolute(".").string());
+        optStrings.push_back("-I" + fs::absolute("./include").string());
+        optStrings.push_back("-I" + fs::absolute("./libs").string());
+
+        // hiprtc does not search the clang resource-dir headers (stddef.h, etc.)
+        // that the kernels pull in via <cmath>/<cooperative_groups.h>; add them.
+        {
+            vector<string> roots;
+            if(const char* p = std::getenv("ROCM_PATH")) roots.push_back(p);
+            if(const char* p = std::getenv("HIP_PATH"))  roots.push_back(p);
+            roots.push_back("/opt/rocm");
+            for(const string& root : roots){
+                for(const string& sub : {string("/llvm/lib/clang"), string("/lib/llvm/lib/clang")}){
+                    string clangDir = root + sub;
+                    std::error_code ec;
+                    if(!fs::exists(clangDir, ec)) continue;
+                    for(auto& e : fs::directory_iterator(clangDir, ec)){
+                        string inc = e.path().string() + "/include";
+                        if(fs::exists(inc + "/stddef.h")) optStrings.push_back("-isystem" + inc);
+                    }
+                }
+                std::error_code ecRoot;
+                if(fs::exists(root + "/include/hip/hip_runtime.h", ecRoot))
+                    optStrings.push_back("-isystem" + root + "/include");
+            }
+        }
 
         // GPU architecture
         string archOpt = "--gpu-architecture=" + archName;

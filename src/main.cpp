@@ -410,6 +410,56 @@ int main(int argc, char** argv){
 	}
 
 	std::locale::global(getSaneLocale());
+	
+	// Headless rasterization benchmark: --bench <file.glb> [width height frames]
+	string benchFile = "";
+	int benchW = 1920, benchH = 1080, benchFrames = 60;
+	for(int i = 1; i < argc; i++){
+		if(string(argv[i]) == "--bench" && i + 1 < argc){
+			benchFile = argv[i + 1];
+			if(i + 4 < argc){ benchW = atoi(argv[i+2]); benchH = atoi(argv[i+3]); benchFrames = atoi(argv[i+4]); }
+		}
+	}
+	if(benchFile != ""){
+		initCuda();
+		CuRast::setup();
+		VKRenderer::camera = make_shared<Camera>();
+		VKRenderer::camera->setSize(benchW, benchH);
+	
+		CuRast* editor = CuRast::instance;
+		Scene& scene = editor->scene;
+		println("[bench] loading {}", benchFile);
+		auto glb = largeGlb::load(benchFile, context, {.skipUVs = false, .compress = false});
+		scene.world->children.push_back(glb->glbNode);
+		scene.updateTransformations();
+	
+		Box3 aabb = glb->glbNode->aabb;
+		vec3 extent = aabb.max - aabb.min;
+		vec3 center = (aabb.min + aabb.max) * 0.5f;
+		Runtime::controls->yaw    = -7.204;
+		Runtime::controls->pitch  = -0.579;
+		Runtime::controls->radius = length(extent);
+		Runtime::controls->target = { center.x, center.y, center.z };
+		println("[bench] {}x{} {} frames, model extent {:.1f}", benchW, benchH, benchFrames, length(extent));
+	
+		double best = 1e30;
+		for(int f = 0; f < benchFrames; f++){
+			VKRenderer::camera->world = glm::translate(Runtime::controls->getPosition()) * Runtime::controls->getRotation();
+			VKRenderer::camera->update();
+			editor->renderHeadless(benchW, benchH, f == benchFrames - 1);
+			cuCtxSynchronize();
+			DeviceState* st = editor->deviceState;
+			double s1 = double(st->nanotime_stage_1 - st->nanotime_start)   / 1000000.0;
+			double s2 = double(st->nanotime_stage_2 - st->nanotime_stage_1) / 1000000.0;
+			double s3 = double(st->nanotime_stage_3 - st->nanotime_stage_2) / 1000000.0;
+			double total = s1 + s2 + s3;
+			if(total < best) best = total;
+			println("[bench] frame {:3}: stage1={:7.3f} stage2={:7.3f} stage3={:7.3f} total={:7.3f} ms", f, s1, s2, s3, total);
+		}
+		println("[bench] best rasterization total: {:.3f} ms over {} triangles", best, (uint64_t)Runtime::numTriangles);
+		println("[bench] wrote ./bench_render.png");
+		return 0;
+	}
 
 	initCuda();
 	VKRenderer::init();

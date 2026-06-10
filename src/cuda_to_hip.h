@@ -6,8 +6,13 @@
 
 #if defined(USE_HIP) || defined(__HIP_PLATFORM_AMD__)
 
+// Under hiprtc (runtime kernel compilation) the device runtime and cooperative
+// groups are provided by hiprtc's auto-included builtin header; the host
+// runtime headers are not on the hiprtc include path, so skip them there.
+#if !defined(__HIPCC_RTC__)
 #include <hip/hip_runtime.h>
 #include <hip/hip_cooperative_groups.h>
+#endif
 
 // Runtime API aliases
 #define cudaMalloc                  hipMalloc

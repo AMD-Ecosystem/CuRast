@@ -181,7 +181,14 @@ struct CudaVirtualMemory{
 		accessDesc.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
 		accessDesc.location.id = cuDevice;
 		accessDesc.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+#if defined(USE_HIP)
+		// ROCm: hipMemSetAccess on a sub-range at a non-zero offset of the
+		// reservation can return hipErrorInvalidValue; setting access over the
+		// whole committed range from the base address works reliably.
+		result = cuMemSetAccess(cptr, comitted + required_additional_size, &accessDesc, 1);
+#else
 		result = cuMemSetAccess(HIP_DEVPTR_ADD(cptr, comitted), required_additional_size, &accessDesc, 1);
+#endif
 		CURuntime::assertCudaSuccess(result);
 
 		comitted += required_additional_size;
