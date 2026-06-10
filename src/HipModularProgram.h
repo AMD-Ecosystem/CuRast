@@ -242,6 +242,7 @@ struct HipModularProgram{
         optStrings.push_back("--std=c++20");
         optStrings.push_back("-ffast-math");
         optStrings.push_back("-ferror-limit=0");
+        if(getenv("CURAST_DEBUG_LAUNCH")){ optStrings.push_back("-g"); }
 
         // Add include paths (absolute: comgr does not reliably resolve relative
         // -I against the launching CWD, and some kernel headers include siblings

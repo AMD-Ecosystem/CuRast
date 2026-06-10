@@ -12,6 +12,11 @@ using namespace std;
 CudaVirtualMemory* cvm_framebuffer = nullptr;
 CudaVirtualMemory* cvm_colorbuffer = nullptr;
 bool initialized = false;
+static bool skipK(const char* name){
+	if(getenv("CURAST_SKIP_RESOLVE")) return true;
+	static std::string list = getenv("CURAST_SKIP") ? getenv("CURAST_SKIP") : "";
+	return list.find(name) != std::string::npos;
+}
 JpegTextures* jpegTextures = nullptr;
 
 // Cuda-Vulkan interop
@@ -375,24 +380,29 @@ void CuRast::draw(Scene* scene, vector<View> views){
 			mappings = mapCudaVk(attachments);
 		}
 
+		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] compile resolve module\n"); fflush(stdout); }
 		static CudaModularProgram* prog = new CudaModularProgram({"./src/kernels/resolve.cu",});
 		// memcpy arguments to constant buffer
 		CUdeviceptr cptr_target = prog->getGlobalsPointer("c_target");
-		cuMemcpyHtoDAsync(cptr_target, &target, sizeof(target), 0);
+		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] c_target ptr=%p, uploading %zu bytes\n", (void*)cptr_target, sizeof(target)); fflush(stdout); }
+		if(cptr_target){ cuMemcpyHtoDAsync(cptr_target, &target, sizeof(target), 0); }
 
 		// Let the first kernel in the frame be a dummy kernel to take the hit for CUDA-OpenGL interop overhead
 		// (so that we get more accurate timings for the other kernels)
 		static CUdeviceptr dummydata = MemoryManager::alloc(16, "dummydata");
-		prog->launch("kernel_dummy", {&dummydata}, 1);
+		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] launch dummy\n"); fflush(stdout); }
+		if(!skipK("dummy")) prog->launch("kernel_dummy", {&dummydata}, 1);
 		
 		{ // resize and clear cuda framebuffer
 			uint32_t clearColor = 0xff000000;
 			float clearDepth = Infinity;
 
 			uint64_t requiredBytes = numPixels * 8;
+			if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] commit framebuffers\n"); fflush(stdout); }
 			cvm_framebuffer->commit(requiredBytes);
 			cvm_colorbuffer->commit(requiredBytes);
 
+			if(!skipK("clear"))
 			prog->launch("kernel_clearFramebuffer", {
 				&cvm_framebuffer->cptr,
 				&numPixels,
@@ -400,6 +410,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 				&clearDepth
 			}, numPixels);
 
+			if(!skipK("clear"))
 			prog->launch("kernel_clearFramebuffer", {
 				&cvm_colorbuffer->cptr,
 				&numPixels,
@@ -408,6 +419,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 			}, numPixels);
 		}
 
+		if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] drawTrianglesVisbuffer\n"); fflush(stdout); }
 		drawTrianglesVisbuffer(
 			scene, view, meshes_unique, meshes_allInstances, 
 			cvm_meshes->cptr, 
@@ -485,7 +497,8 @@ void CuRast::draw(Scene* scene, vector<View> views){
 				&rasterSettings,
 				&jpp,
 			};
-			prog->launch2D("kernel_resolve_visbuffer_to_colorbuffer2D", args, target.width, target.height);
+			if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] resolve visbuffer->colorbuffer\n"); fflush(stdout); }
+			if(!skipK("resolve2d")) prog->launch2D("kernel_resolve_visbuffer_to_colorbuffer2D", args, target.width, target.height);
 		}
 
 		if(hasJpegCompressedTextures){
@@ -654,7 +667,7 @@ void CuRast::draw(Scene* scene, vector<View> views){
 			prog->launch2D("kernel_resolve_colorbuffer_to_opengl_2D", args, target.width, target.height);
 		}
 
-		if(CuRastSettings::requestScreenshot){
+		if(CuRastSettings::requestScreenshot && !skipK("screenshot")){
 			saveScreenshot(target, view, cvm_ssaoShadebuffer->cptr, prog);
 		}
 
@@ -699,6 +712,7 @@ void CuRast::renderHeadless(int W, int H, bool screenshot){
 	CuRastSettings::requestScreenshot = screenshot ? make_shared<string>("./bench_render.png") : nullptr;
 
 	Timer::enabled = true;
+	if(getenv("CURAST_DEBUG_LAUNCH")){ printf("[step] renderHeadless: draw begin\n"); fflush(stdout); }
 	draw(&scene, { VKRenderer::view });
 
 	lastFrameMs = 0.0;
