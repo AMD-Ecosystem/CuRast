@@ -339,7 +339,7 @@ void kernel_stage1_binning(
 #else
 	auto grid = cg::this_grid();
 	auto block = cg::this_thread_block();
-
+	
 	// Initialize gridwide state
 	if(grid.thread_rank() == 0){
 		*args.numProcessedBatches = 0;
@@ -349,7 +349,7 @@ void kernel_stage1_binning(
 		*args.numProcessedHugeTriangles = 0;
 		*queueSize = 0;
 	}
-
+	
 
 	// Initialize block state
 	__shared__ int sh_blockBatchIndex;
@@ -367,7 +367,7 @@ void kernel_stage1_binning(
 
 	grid.sync();
 #endif
-
+	
 	
 
 	// LOOP THROUGH TRIANGLES
@@ -516,7 +516,7 @@ void kernel_stage4_blend(
 #else
 	u32 tileID = grid.block_rank();
 #endif
-
+	
 	u32 tiles_x = (args.target.width + TILE_SIZE_TRANSLUCENT - 1) / TILE_SIZE_TRANSLUCENT;
 	u32 tiles_y = (args.target.height + TILE_SIZE_TRANSLUCENT - 1) / TILE_SIZE_TRANSLUCENT;
 	u32 tile_x = tileID % tiles_x;

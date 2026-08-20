@@ -224,7 +224,7 @@ void drawTrianglesVisbuffer(
 	args.nontrivialTrianglesList         = (u64*)cptr_nontrivialList;
 	args.target                          = target;
 	args.state                           = (DeviceState*)CuRast::instance->cptr_state;
-
+	
 #if defined(USE_HIP)
 	// Zero stage1 counters and dbg_fragcount on the CPU so stage1 can be
 	// launched non-cooperatively. hipModuleLaunchCooperativeKernel fails
@@ -316,7 +316,7 @@ void drawTrianglesTranslucent(
 	// string strKernelStage2 = format("kernel_", strCompressed);
 	
 	cuMemsetD8(cptr_queueSize, 0, 4);
-
+	
 	auto custart = Timer::recordCudaTimestamp();
 #if defined(USE_HIP)
 	// Zero the binning counters and dbg_fragcount on the CPU so stage1 does not
@@ -366,9 +366,9 @@ void drawTrianglesTranslucent(
 	});
 #else
 	prog->launchCooperative("kernel_stage3_computeRanges", vector<void*>{
-		&args,
-		&cptr_queueTriangles,
-		&cptr_queueKeyValueSorted,
+		&args, 
+		&cptr_queueTriangles, 
+		&cptr_queueKeyValueSorted, 
 		&cptr_queueSize,
 		&cptr_tileRanges,
 		&numTiles,

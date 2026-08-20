@@ -217,8 +217,8 @@ void loadPointcloud(string file){
 			
 			laszip_close_reader(laszip_reader);
 			
-			cuMemcpyHtoD(points->cptr_positions + startIndex * sizeof(vec3), positions.data(), byteSizeOf(positions));
-			cuMemcpyHtoD(points->cptr_colors + startIndex * sizeof(u32), colors.data(), byteSizeOf(colors));
+			cuMemcpyHtoD(HIP_DEVPTR_ADD(points->cptr_positions, startIndex * sizeof(vec3)), positions.data(), byteSizeOf(positions));
+			cuMemcpyHtoD(HIP_DEVPTR_ADD(points->cptr_colors, startIndex * sizeof(u32)), colors.data(), byteSizeOf(colors));
 			
 		});
 	}
