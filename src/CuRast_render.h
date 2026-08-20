@@ -156,7 +156,16 @@ void drawPoints(Scene* scene, View view, RenderTarget& target){
 			&node->numPoints,
 			&worldView
 		};
+#if defined(USE_HIP)
+		// kernel_drawPoints distributes work with a grid-stride loop and never
+		// calls grid.sync(), so a cooperative launch buys it nothing. Launch it
+		// non-cooperatively: hipModuleLaunchCooperativeKernel fails with error
+		// 719 on gfx1201, and a full-occupancy cooperative launch can deadlock
+		// on gfx1100 because the driver cannot make all blocks resident.
+		prog->launchOccupancyBased("kernel_drawPoints", args, {.blocksize = 256});
+#else
 		prog->launchCooperative("kernel_drawPoints", args, {.blocksize = 256});
+#endif
 		
 		totalPoints += node->numPoints;
 	}
@@ -307,9 +316,25 @@ void drawTrianglesTranslucent(
 	// string strKernelStage2 = format("kernel_", strCompressed);
 	
 	cuMemsetD8(cptr_queueSize, 0, 4);
-	
+
 	auto custart = Timer::recordCudaTimestamp();
+#if defined(USE_HIP)
+	// Zero the binning counters and dbg_fragcount on the CPU so stage1 does not
+	// need the grid-wide barrier that follows their in-kernel initialization,
+	// and can therefore be launched non-cooperatively. Same reasoning as the
+	// visbuffer pipeline above.
+	CUdeviceptr cptr_state_dev = CuRast::instance->cptr_state;
+	cuMemsetD8Async(cptr_numProcessedBatches,            0, 4, 0);
+	cuMemsetD8Async(cptr_numProcessedBatches_nontrivial, 0, 4, 0);
+	cuMemsetD8Async(cptr_hugeTrianglesCounter,           0, 4, 0);
+	cuMemsetD8Async(cptr_nontrivialCounter,              0, 4, 0);
+	cuMemsetD8Async(cptr_numProcessedHugeTriangles,      0, 4, 0);
+	cuMemsetD8Async(HIP_DEVPTR_ADD(cptr_state_dev, offsetof(DeviceState, dbg_fragcount)), 0, sizeof(uint64_t), 0);
+
+	prog->launchOccupancyBased("kernel_stage1_binning", vector<void*>{&args, &cptr_queueTriangles, &cptr_queueKeyValue, &cptr_queueSize}, {.blocksize = TRIANGLES_PER_SWEEP});
+#else
 	prog->launchCooperative("kernel_stage1_binning", vector<void*>{&args, &cptr_queueTriangles, &cptr_queueKeyValue, &cptr_queueSize}, {.blocksize = TRIANGLES_PER_SWEEP});
+#endif
 	// prog->launchCooperative(strKernelStage2, vector<void*>{&args});
 	
 	// Stage 2: Sort - read queue size to host (syncs the stream), then CUB-sort on GPU
@@ -328,14 +353,27 @@ void drawTrianglesTranslucent(
 	u32 numTiles = tiles_x * tiles_y;
 	cuMemsetD8(cptr_tileRanges, 0, sizeof(ivec2) * numTiles);
 	
-	prog->launchCooperative("kernel_stage3_computeRanges", vector<void*>{
-		&args, 
-		&cptr_queueTriangles, 
-		&cptr_queueKeyValueSorted, 
+#if defined(USE_HIP)
+	// kernel_stage3_computeRanges has no grid.sync either; the grid dimensions
+	// are the same as for the cooperative launch below.
+	prog->launchOccupancyBased("kernel_stage3_computeRanges", vector<void*>{
+		&args,
+		&cptr_queueTriangles,
+		&cptr_queueKeyValueSorted,
 		&cptr_queueSize,
 		&cptr_tileRanges,
 		&numTiles,
 	});
+#else
+	prog->launchCooperative("kernel_stage3_computeRanges", vector<void*>{
+		&args,
+		&cptr_queueTriangles,
+		&cptr_queueKeyValueSorted,
+		&cptr_queueSize,
+		&cptr_tileRanges,
+		&numTiles,
+	});
+#endif
 	
 	prog->launch("kernel_stage4_blend", vector<void*>{
 		&args, 

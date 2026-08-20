@@ -67,7 +67,7 @@ The Linux build uses mmap for [memory mapping](./src/MappedFile.h) and `O_DIRECT
 CuRast also builds and runs on AMD GPUs with ROCm/HIP. The CUDA driver API and the nvrtc/nvJitLink runtime-compilation path are mapped to the HIP driver API and hiprtc. Enable it with the `USE_HIP` CMake option.
 
 Dependencies:
-* ROCm 7.2 or newer (provides hipcc/amdclang++ and hiprtc)
+* ROCm 7.2 or newer (provides hipcc/amdclang++, hiprtc and hipCUB, which stands in for CUB)
 * An AMD GPU. Validated on gfx90a (CDNA2), gfx1100 (RDNA3), and gfx1201 (RDNA4).
 
 Configure and build, selecting the target architecture with `CMAKE_HIP_ARCHITECTURES`:

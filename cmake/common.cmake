@@ -39,13 +39,17 @@ function(ADD_CUDA TARGET_NAME)
 		# HIP/ROCm configuration
 		find_package(hip REQUIRED)
 		find_package(hiprtc REQUIRED)
+		# hipCUB supplies the device-wide primitives that CUB provides on NVIDIA.
+		find_package(hipcub REQUIRED)
 
 		MESSAGE(STATUS "HIP found: ${hip_FOUND}")
 		MESSAGE(STATUS "HIP include dirs: ${hip_INCLUDE_DIRS}")
 
 		# Link HIP runtime and hiprtc. Use hip::host for linking only,
 		# not hip::device which adds compile flags to all sources.
-		target_include_directories(${TARGET_NAME} PRIVATE ${hip_INCLUDE_DIRS})
+		# Include hipCUB by directory rather than linking hip::hipcub, which pulls
+		# in hip::device and would apply HIP compile flags to the C++ sources too.
+		target_include_directories(${TARGET_NAME} PRIVATE ${hip_INCLUDE_DIRS} ${hipcub_INCLUDE_DIRS})
 		target_link_libraries(${TARGET_NAME} PRIVATE
 			amdhip64
 			hiprtc::hiprtc
