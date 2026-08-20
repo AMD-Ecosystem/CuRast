@@ -30,11 +30,11 @@ struct SceneNode{
 	uint32_t id;
 
 	// local transform of each matrix
-	mat4 transform = mat4(1.0f);
+	dmat4 transform = dmat4(1.0f);
 
 	// global transform with transformations of parents applied to it.
 	// updatated via scene.updateTransformations()
-	mat4 transform_global = mat4(1.0f);
+	dmat4 transform_global = dmat4(1.0);
 	bool visible = true;
 	Box3 aabb;
 	vector<shared_ptr<SceneNode>> children;

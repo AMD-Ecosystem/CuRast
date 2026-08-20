@@ -1,7 +1,7 @@
 
 # CuRast: Cuda-Based Software Rasterization for Billions of Triangles
 
-<a href="http://arxiv.org/abs/2604.21749" target="_blank" rel="noopener noreferrer">[Paper]</a>
+<a href="https://diglib.eg.org/items/e0145eb3-5971-450b-b8ca-7eaf23332df7" target="_blank" rel="noopener noreferrer">[Paper]</a>
 
 __About__: [Nanite](https://advances.realtimerendering.com/s2021/Karis_Nanite_SIGGRAPH_Advances_2021_final.pdf) has demonstrated that small triangles can be rasterized more efficiently with custom compute shaders than with the fixed-function hardware pipeline. Building on this insight, we explore how far this advantage can be pushed for real-time rendering of massive triangle datasets without relying on precomputed LODs or acceleration structures. 
 
@@ -175,3 +175,16 @@ Some test data sets we've been using, with download link if available.
 - [Meshoptimizer](https://github.com/zeux/meshoptimizer): Optimizes the arrangement of vertices and triangles to improve locality and/or vertex reuse, and also features hierarchical clustered LOD construction. 
 - ["Billions of triangles in minutes"](https://zeux.io/2025/09/30/billions-of-triangles-in-minutes/): A blog post describing the clustered LOD construction algorithm in meshoptimizer, and the road to reducing the preprocessing time for the entire Zorah data set down to just about two and a half minutes. 
 - ["Learning from failure"](https://advances.realtimerendering.com/s2015/AlexEvans_SIGGRAPH-2015-sml.pdf): A talk about the architecture and software rasterization process of the PS4 game _Dreams_. [\[video\]](https://www.youtube.com/watch?v=u9KNtnCZDMI)
+
+### Bibtex
+```
+@article{CuRast,
+	journal = {Computer Graphics Forum},
+	title = {{CuRast: Cuda-Based Software Rasterization for Billions of Triangles}},
+	author = {Schütz, Markus and Lipp, Lukas and Kristmann, Elias and Wimmer, Michael},
+	year = {2026},
+	publisher = {The Eurographics Association and John Wiley & Sons Ltd.},
+	ISSN = {1467-8659},
+	DOI = {10.1111/cgf.70538}
+}
+```

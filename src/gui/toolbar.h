@@ -159,6 +159,8 @@ void CuRast::makeToolbar(){
 
 				ImGui::Checkbox("Enable Picking", &CuRastSettings::enableObjectPicking);
 				ImGui::SameLine();
+				ImGui::Checkbox("Enable Translucency", &CuRastSettings::enableTranslucency);
+				ImGui::SameLine();
 				ImGui::Checkbox("Inset", &CuRastSettings::showInset);
 				
 				// ImGui::SameLine();
@@ -316,60 +318,60 @@ void CuRast::makeToolbar(){
 				startSection("Actions");
 
 				if(ImGui::Button("Flip YZ")){
-					mat4 flip = mat4(
+					dmat4 flip = dmat4(
 						1.000,  0.000, 0.000, 0.000,
 						0.000,  0.000, 1.000, 0.000,
 						0.000,  1.000, 0.000, 0.000,
 						0.000,  0.000, 0.000, 1.000);
-					editor->scene.world->transform = flip * editor->scene.world->transform;
+					editor->scene.world->transform = mat4(flip * editor->scene.world->transform);
 				}
 
 				ImGui::SameLine();
 				if(ImGui::Button("Mirror X")){
-					mat4 flip = mat4(
+					dmat4 flip = dmat4(
 					   -1.000,  0.000, 0.000, 0.000,
 						0.000,  1.000, 0.000, 0.000,
 						0.000,  0.000, 1.000, 0.000,
 						0.000,  0.000, 0.000, 1.000);
-					editor->scene.world->transform = flip * editor->scene.world->transform;
+					editor->scene.world->transform = mat4(flip * editor->scene.world->transform);
 				}
 
 				if(ImGui::Button("Flip XY")){
-					mat4 flip = mat4(
+					dmat4 flip = dmat4(
 						0.000,  1.000, 0.000, 0.000,
 						1.000,  0.000, 0.000, 0.000,
 						0.000,  0.000, 1.000, 0.000,
 						0.000,  0.000, 0.000, 1.000);
-					editor->scene.world->transform = flip * editor->scene.world->transform;
+					editor->scene.world->transform = mat4(flip * editor->scene.world->transform);
 				}
 				ImGui::SameLine();
 				if(ImGui::Button("Mirror Y")){
-					mat4 flip = mat4(
+					dmat4 flip = dmat4(
 					    1.000,  0.000, 0.000, 0.000,
 						0.000, -1.000, 0.000, 0.000,
 						0.000,  0.000, 1.000, 0.000,
 						0.000,  0.000, 0.000, 1.000);
-					editor->scene.world->transform = flip * editor->scene.world->transform;
+					editor->scene.world->transform = mat4(flip * editor->scene.world->transform);
 				}
 				
 
 				if(ImGui::Button("Flip XZ")){
-					mat4 flip = mat4(
+					dmat4 flip = dmat4(
 						0.000,  0.000, 1.000, 0.000,
 						0.000,  1.000, 0.000, 0.000,
 						1.000,  0.000, 0.000, 0.000,
 						0.000,  0.000, 0.000, 1.000);
-					editor->scene.world->transform = flip * editor->scene.world->transform;
+					editor->scene.world->transform = mat4(flip * editor->scene.world->transform);
 				}
 				
 				ImGui::SameLine();
 				if(ImGui::Button("Mirror Z")){
-					mat4 flip = mat4(
+					dmat4 flip = dmat4(
 						1.000,  0.000, 0.000, 0.000,
 						0.000,  1.000, 0.000, 0.000,
 						0.000,  0.000,-1.000, 0.000,
 						0.000,  0.000, 0.000, 1.000);
-					editor->scene.world->transform = flip * editor->scene.world->transform;
+					editor->scene.world->transform = mat4(flip * editor->scene.world->transform);
 				}
 
 				endSection();

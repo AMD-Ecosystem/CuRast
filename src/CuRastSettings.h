@@ -23,6 +23,7 @@ struct CuRastSettings{
 	static inline bool freezeFrustum = false;
 	static inline bool enableSSAO = false;
 	static inline bool enableDiffuseLighting = false;
+	static inline bool enableTranslucency = false;
 	static inline bool disableInstancing = false;
 	static inline bool enableObjectPicking = false;
 	static inline shared_ptr<string> requestScreenshot = nullptr; // Set to path of screenshot, or empty string for auto path
