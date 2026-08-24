@@ -28,7 +28,7 @@ struct Benchmarking{
 		// bool isMeshoptimized       = false;
 		int imageDivisionFactor    = 1;
 		DisplayAttribute attribute = DisplayAttribute::TEXTURE;
-		mat4 transform             = mat4(1.0);
+		dmat4 transform            = dmat4(1.0);
 		ivec2 instances_count      = {1, 1};
 		vec2 instances_spacing     = {3.0, 3.0};
 

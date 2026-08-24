@@ -94,7 +94,7 @@ namespace largeGlb{
 		return true;
 	}
 
-	Texture* createMipMappedTexture(void* data, int64_t width, int64_t height){
+	Texture* createMipMappedTexture(uint8_t* data, int64_t width, int64_t height){
 		int64_t levels = log2(max(width, height));
 		int64_t bytesPerPixel = 4;
 
@@ -108,6 +108,16 @@ namespace largeGlb{
 
 			mipWidth = (mipWidth + 2 - 1) / 2;
 			mipHeight = (mipHeight + 2 - 1) / 2;
+		}
+		
+		bool isTranslucent = false;
+		for(int pixelID = 0; pixelID < width * height; pixelID++){
+			uint8_t alpha = data[4 * pixelID + 3];
+			
+			if(alpha != 255){
+				isTranslucent = true;
+				break;
+			}
 		}
 
 		CUdeviceptr cptr_texture = MemoryManager::alloc(byteSize, "texture");
@@ -123,6 +133,7 @@ namespace largeGlb{
 		texture->width = width;
 		texture->height = height;
 		texture->data = (uint32_t*)cptr_texture;
+		texture->isTranslucent = isTranslucent;
 
 		return texture;
 	}

@@ -108,14 +108,14 @@ struct Camera {
 		view = glm::inverse(world);
 
 		float pi = glm::pi<float>();
-		proj = Camera::createProjectionMatrix(near_, pi * fovy / 180.0, aspect);
+		proj = Camera::createProjectionMatrix(float(near_), float(pi * fovy / 180.0), float(aspect));
 	}
 
 	vec3 getRayDir(float u, float v) {
 		vec3 origin = getPosition();
 
-		float right = 1.0f / proj[0][0];
-		float up    = 1.0f / proj[1][1];
+		float right = float(1.0 / proj[0][0]);
+		float up    = float(1.0 / proj[1][1]);
 		vec4  dir_00_worldspace = inverse(view) * vec4(-right, -up,   -1.0f, 1.0f);
 		vec4  dir_01_worldspace = inverse(view) * vec4(-right,  up,   -1.0f, 1.0f);
 		vec4  dir_10_worldspace = inverse(view) * vec4( right, -up,   -1.0f, 1.0f);

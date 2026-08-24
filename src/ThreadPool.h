@@ -17,7 +17,7 @@ public:
 	ThreadPool(size_t numThreads) 
 		: stop(false), activeTasks(0) 
 	{
-		this->numThreads = numThreads;
+		this->numThreads = int(numThreads);
 
 		for (size_t threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
 			workers.emplace_back([this, threadIndex] {
@@ -40,8 +40,16 @@ public:
 					
 					// Atomically decrement and notify the wait() function
 					if (--activeTasks == 0) {
-						std::unique_lock<std::mutex> lock(waitMutex);
-						waitCondition.notify_all();
+						std::vector<std::function<void()>> callbacks;
+						{
+							std::unique_lock<std::mutex> lock(waitMutex);
+							callbacks.swap(emptyCallbacks);
+							waitCondition.notify_all();
+						}
+						// Invoke outside the lock so callbacks may enqueue() or onEmpty()
+						for (auto& callback : callbacks) {
+							callback();
+						}
 					}
 				}
 			});
@@ -55,6 +63,21 @@ public:
 			activeTasks++; // Increment active task count
 		}
 		condition.notify_one();
+	}
+	
+	// Invoke callback once all tasks are finished. If no tasks are pending,
+	// the callback is invoked immediately; otherwise it fires once when the
+	// active task count drops to zero.
+	void onEmpty(std::function<void()> callback) {
+		{
+			std::unique_lock<std::mutex> lock(waitMutex);
+			if (activeTasks != 0) {
+				emptyCallbacks.push_back(std::move(callback));
+				return;
+			}
+		}
+
+		callback();
 	}
 
 	// New: Block until all tasks are finished
@@ -83,9 +106,10 @@ private:
 	std::mutex queueMutex;
 	std::condition_variable condition;
 	
-	// For the wait() functionality
+	// For the wait() functionality; waitMutex also guards emptyCallbacks
 	std::mutex waitMutex;
 	std::condition_variable waitCondition;
+	std::vector<std::function<void()>> emptyCallbacks;
 	std::atomic<size_t> activeTasks;
 	
 	bool stop;
